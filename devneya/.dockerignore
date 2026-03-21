@@ -18,4 +18,3 @@ env
 *.log
 *.md
 .DS_Store
-blocks_save.json

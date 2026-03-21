@@ -3,16 +3,6 @@ from monsterui.all import *
 import json
 import os
 
-def is_running_in_docker():
-    return os.path.exists('/.dockerenv') or os.environ.get('DOCKER_ENV') == 'true'
-
-if is_running_in_docker():
-    HOST = os.getenv("HOST", "0.0.0.0")
-    PORT = int(os.getenv("PORT", "5001"))
-else:
-    HOST = os.getenv("HOST", "127.0.0.1")
-    PORT = int(os.getenv("PORT", "5001"))
-
 BLOCK_TYPES = ["bestofn", "chainofthought", "codeact", "predict", 
                "programofthought", "react", "refine", "rlm", "multichaincomparison"]
 
@@ -173,4 +163,4 @@ def delete_block(bid: str):
     return render_ws()
 
 if __name__ == "__main__":
-    serve(host=HOST, port=PORT)
+    serve(host="0.0.0.0", port=5001)
