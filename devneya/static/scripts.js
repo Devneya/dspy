@@ -1,22 +1,91 @@
+const BLOCK_TYPES = new Set([
+    "bestofn", "chainofthought", "codeact", "predict",
+    "programofthought", "react", "refine", "rlm", "multichaincomparison"
+]);
+
+if (!sessionStorage.getItem('localStorageCleared')) {
+    localStorage.removeItem('dspy_blocks_data');
+    localStorage.removeItem('dspy_blocks_order');
+    localStorage.removeItem('dspy_blocks_text');
+    localStorage.removeItem('dspy_block_labels');
+    localStorage.removeItem('dspy_block_texts');
+    sessionStorage.setItem('localStorageCleared', 'true');
+}
+
+const Storage = {
+    save(data) {
+        localStorage.setItem('dspy_blocks_data', JSON.stringify(data));
+    },
+    
+    load() {
+        const saved = localStorage.getItem('dspy_blocks_data');
+        return saved ? JSON.parse(saved) : { order: [], texts: {} };
+    },
+    
+    saveFromDOM() {
+        const blocks = document.querySelectorAll('.workspace-block');
+        const order = Array.from(blocks).map(b => b.id);
+        const texts = {};
+        blocks.forEach(block => {
+            const textSpan = block.querySelector('.block-additional-text');
+            const text = textSpan?.textContent;
+            if (text && text !== "Space for dspy module settings") {
+                texts[block.id] = text;
+            }
+        });
+        this.save({ order, texts });
+    },
+    
+    updateText(blockId, text) {
+        const data = this.load();
+        if (text && text !== "Space for dspy module settings") {
+            data.texts[blockId] = text;
+        } else {
+            delete data.texts[blockId];
+        }
+        this.save(data);
+    }
+};
+
+const UI = {
+    restore() {
+        const data = Storage.load();
+        const blocks = document.querySelectorAll('.workspace-block');
+        blocks.forEach(block => {
+            const text = data.texts[block.id];
+            if (text) {
+                const textSpan = block.querySelector('.block-additional-text');
+                if (textSpan) textSpan.textContent = text;
+            }
+        });
+    }
+};
+
+// ==================== CONTEXT MENU ====================
+let currentMenu = null;
+
+function closeMenu() {
+    if (currentMenu) {
+        currentMenu.remove();
+        currentMenu = null;
+    }
+}
+
 function showContextMenu(event, blockId) {
     event.preventDefault();
     event.stopPropagation();
-    
-    const existingMenu = document.querySelector('.block-menu');
-    if (existingMenu) {
-        existingMenu.remove();
-    }
+    closeMenu();
     
     const block = document.getElementById(blockId);
-    const textSpan = block ? block.querySelector('.block-additional-text') : null;
-    const currentText = textSpan ? textSpan.textContent : '';
+    const textSpan = block?.querySelector('.block-additional-text');
+    const currentText = textSpan?.textContent === "Space for dspy module settings" ? '' : (textSpan?.textContent || '');
     
     const menu = document.createElement('div');
     menu.className = 'block-menu';
     menu.innerHTML = `
         <div class="menu-item">
-            <textarea id="block-text-input" rows="3" placeholder="Enter additional text..." class="menu-textarea">${currentText === 'No additional text' ? '' : currentText.replace(/"/g, '&quot;')}</textarea>
-            <button id="save-text-btn" class="menu-save-btn">Save</button>
+            <textarea rows="3" placeholder="Enter dspy module settings" class="menu-textarea">${currentText.replace(/"/g, '&quot;')}</textarea>
+            <button class="menu-save-btn">Save</button>
         </div>
     `;
     
@@ -24,89 +93,56 @@ function showContextMenu(event, blockId) {
     menu.style.left = event.clientX + 'px';
     menu.style.top = event.clientY + 'px';
     
-    const input = menu.querySelector('#block-text-input');
-    input.focus();
+    const textarea = menu.querySelector('textarea');
+    const saveBtn = menu.querySelector('.menu-save-btn');
     
-    const saveBtn = menu.querySelector('#save-text-btn');
     saveBtn.addEventListener('click', () => {
-        const newText = input.value.trim();
-        if (textSpan) {
-            if (newText) {
-                textSpan.textContent = newText;
-            } else {
-                textSpan.textContent = "No additional text";
-            }
-            
-            const savedTexts = localStorage.getItem('dspy_block_texts') || '{}';
-            const texts = JSON.parse(savedTexts);
-            texts[blockId] = newText;
-            localStorage.setItem('dspy_block_texts', JSON.stringify(texts));
-            
-            fetch(`/update-text/${blockId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `text=${encodeURIComponent(newText)}`
-            });
-        }
-        menu.remove();
+        const newText = textarea.value.trim();
+        UI.updateBlockText(blockId, newText);
+        Storage.updateText(blockId, newText);
+        fetch(`/update-text/${blockId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `text=${encodeURIComponent(newText)}`
+        });
+        closeMenu();
     });
     
-    input.addEventListener('keypress', (e) => {
+    textarea.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             saveBtn.click();
         }
     });
     
-    function closeMenu(e) {
+    function onClickOutside(e) {
         if (!menu.contains(e.target)) {
-            menu.remove();
-            document.removeEventListener('click', closeMenu);
-            document.removeEventListener('contextmenu', closeMenu);
+            closeMenu();
+            document.removeEventListener('click', onClickOutside);
+            document.removeEventListener('contextmenu', onClickOutside);
         }
     }
     
     document.body.appendChild(menu);
+    currentMenu = menu;
+    textarea.focus();
     setTimeout(() => {
-        document.addEventListener('click', closeMenu);
-        document.addEventListener('contextmenu', closeMenu);
+        document.addEventListener('click', onClickOutside);
+        document.addEventListener('contextmenu', onClickOutside);
     }, 0);
 }
 
+UI.updateBlockText = function(blockId, text) {
+    const block = document.getElementById(blockId);
+    const textSpan = block?.querySelector('.block-additional-text');
+    if (textSpan) {
+        textSpan.textContent = text || "No additional text";
+    }
+};
+
 window.showContextMenu = showContextMenu;
 
-function saveBlocksToLocalStorage(blockIds) {
-    localStorage.setItem('dspy_blocks_order', JSON.stringify(blockIds));
-    
-    const blocks = document.querySelectorAll('.workspace-block');
-    const texts = {};
-    blocks.forEach(block => {
-        const id = block.id;
-        const textSpan = block.querySelector('.block-additional-text');
-        if (textSpan && textSpan.textContent !== "No additional text") {
-            texts[id] = textSpan.textContent;
-        }
-    });
-    localStorage.setItem('dspy_block_texts', JSON.stringify(texts));
-}
-
-function loadTextsFromLocalStorage() {
-    const savedTexts = localStorage.getItem('dspy_block_texts');
-    if (savedTexts) {
-        const texts = JSON.parse(savedTexts);
-        const blocks = document.querySelectorAll('.workspace-block');
-        blocks.forEach(block => {
-            const id = block.id;
-            if (texts[id]) {
-                const textSpan = block.querySelector('.block-additional-text');
-                if (textSpan) {
-                    textSpan.textContent = texts[id];
-                }
-            }
-        });
-    }
-}
-
+// ==================== DRAG & DROP ====================
 document.addEventListener('dragstart', e => {
     const item = e.target.closest('[draggable="true"]');
     if (item && item.dataset.blockType) {
@@ -122,28 +158,21 @@ document.addEventListener('drop', e => {
     const zone = e.target.closest('#working-area');
     if (!zone) return;
     e.preventDefault();
-    
     if (isDropping) return;
     
     const type = e.dataTransfer.getData('text/plain');
-    const validTypes = new Set([
-        "bestofn", "chainofthought", "codeact", "predict",
-        "programofthought", "react", "refine", "rlm", "multichaincomparison"
-    ]);
-    if (validTypes.has(type)) {
+    if (BLOCK_TYPES.has(type)) {
         isDropping = true;
         htmx.ajax('POST', `/add/${type}`, {
             target: '#ws',
             swap: 'outerHTML'
-        }).then(() => { isDropping = false; })
-          .catch(() => { isDropping = false; });
+        }).finally(() => { isDropping = false; });
     }
 });
 
 function initSortable() {
     const area = document.getElementById('working-area');
     if (!area) return;
-    
     if (area._sortable) area._sortable.destroy();
     
     area._sortable = new Sortable(area, {
@@ -151,7 +180,7 @@ function initSortable() {
         handle: '.workspace-block',
         onEnd: () => {
             const order = Array.from(area.children).map(c => c.id);
-            saveBlocksToLocalStorage(order);
+            Storage.saveFromDOM();
             htmx.ajax('POST', '/reorder', {
                 target: '#ws',
                 values: {order: JSON.stringify(order)},
@@ -161,28 +190,29 @@ function initSortable() {
     });
 }
 
+function initialize() {
+    initSortable();
+    
+    const data = Storage.load();
+    if (data.order && data.order.length > 0 && !window.initialLoadDone) {
+        window.initialLoadDone = true;
+        htmx.ajax('POST', '/reorder', {
+            target: '#ws',
+            values: {order: JSON.stringify(data.order)},
+            swap: 'outerHTML'
+        });
+    } else {
+        UI.restore();
+    }
+}
+
 document.body.addEventListener('htmx:afterSwap', (evt) => {
-    if (evt.detail.target && evt.detail.target.id === 'ws') {
+    if (evt.detail.target?.id === 'ws') {
         setTimeout(() => {
-            loadTextsFromLocalStorage();
+            UI.restore();
             initSortable();
         }, 10);
     }
 });
 
-initSortable();
-
-if (!window.initialLoadDone) {
-    window.initialLoadDone = true;
-    const savedOrder = localStorage.getItem('dspy_blocks_order');
-    if (savedOrder) {
-        const blockIds = JSON.parse(savedOrder);
-        htmx.ajax('POST', '/reorder', {
-            target: '#ws',
-            values: {order: JSON.stringify(blockIds)},
-            swap: 'outerHTML'
-        });
-    } else {
-        loadTextsFromLocalStorage();
-    }
-}
+initialize();

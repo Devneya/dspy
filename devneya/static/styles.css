@@ -8,6 +8,16 @@ html, body {
     padding: 0;
 }
 
+/* ==================== LAYOUT ==================== */
+.container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 1rem;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
 .main-container {
     display: flex;
     gap: 24px;
@@ -24,6 +34,15 @@ html, body {
     min-height: 0;
 }
 
+#ws {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+/* ==================== PALETTE ==================== */
 .palette-scroll {
     width: 280px;
     height: 100%;
@@ -47,6 +66,7 @@ html, body {
     text-align: center;
 }
 
+/* ==================== DRAGGABLE ITEMS ==================== */
 .draggable-item {
     margin-bottom: 12px;
     cursor: grab;
@@ -67,6 +87,7 @@ html, body {
     font-size: 0.875rem;
 }
 
+/* ==================== WORKSPACE ==================== */
 .workspace {
     height: 100%;
     background: #f9fafb;
@@ -112,6 +133,7 @@ html, body {
     margin-bottom: 1rem;
 }
 
+/* ==================== BLOCKS ==================== */
 .block-card, .workspace-block {
     background-color: #3b82f6;
     color: white;
@@ -176,6 +198,121 @@ html, body {
     font-family: monospace;
 }
 
+.block-text-display {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.block-additional-text {
+    display: block;
+    color: rgba(255,255,255,0.9);
+}
+
+/* ==================== CONTEXT MENU ==================== */
+.block-menu {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    padding: 8px;
+    z-index: 10000;
+    min-width: 260px;
+    animation: menuFadeIn 0.15s ease-out;
+    position: fixed;
+}
+
+.dark .block-menu {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+.menu-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ==================== CONTEXT MENU TEXTAREA ==================== */
+.menu-textarea {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: monospace;
+    resize: vertical;
+    background: white;
+    color: #1f2937;
+    transition: all 0.2s ease;
+}
+
+.dark .menu-textarea {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #e5e7eb;
+}
+
+.menu-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+
+.dark .menu-textarea:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 2px rgba(96,165,250,0.2);
+}
+
+.menu-textarea::placeholder {
+    color: #9ca3af;
+}
+
+.dark .menu-textarea::placeholder {
+    color: #6b7280;
+}
+
+/* ==================== MENU SAVE BUTTON ==================== */
+.menu-save-btn {
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.2s ease;
+}
+
+.menu-save-btn:hover {
+    background: #2563eb;
+}
+
+.dark .menu-save-btn {
+    background: #3b82f6;
+}
+
+.dark .menu-save-btn:hover {
+    background: #2563eb;
+}
+
+/* ==================== MENU ANIMATION ==================== */
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ==================== THEME TOGGLE ==================== */
 .theme-toggle-btn {
     position: fixed;
     top: 20px;
@@ -200,6 +337,7 @@ html, body {
 .dark .light-icon { display: none; }
 .dark .dark-icon { display: inline; }
 
+/* ==================== BUTTONS ==================== */
 .clear-btn {
     background: #dc2626;
     color: white;
@@ -215,6 +353,7 @@ html, body {
     background: #b91c1c;
 }
 
+/* ==================== TYPOGRAPHY ==================== */
 .main-title {
     font-weight: bold;
     font-size: 2.25rem;
@@ -223,15 +362,7 @@ html, body {
     margin-bottom: 1.5rem;
 }
 
-.container {
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 0 1rem;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
+/* ==================== SCROLLBAR ==================== */
 .palette-scroll::-webkit-scrollbar {
     width: 6px;
 }
@@ -260,91 +391,4 @@ html, body {
 
 .dark .palette-scroll::-webkit-scrollbar-thumb:hover {
     background: #888;
-}
-
-#ws {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-}
-
-.block-menu {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-    padding: 8px;
-    z-index: 10000;
-}
-
-.dark .block-menu {
-    background: #2d2d2d;
-    border-color: #404040;
-}
-
-.menu-item {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.menu-input {
-    padding: 6px 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 14px;
-    width: 200px;
-}
-
-.dark .menu-input {
-    background: #1f2937;
-    border-color: #404040;
-    color: white;
-}
-
-.menu-save-btn {
-    padding: 6px 12px;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-}
-
-.menu-save-btn:hover {
-    background: #2563eb;
-}
-
-.block-text-display {
-    margin-top: 8px;
-    padding: 8px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    word-break: break-word;
-}
-
-.block-additional-text {
-    display: block;
-    color: rgba(255,255,255,0.9);
-}
-
-.menu-textarea {
-    padding: 8px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 14px;
-    width: 250px;
-    resize: vertical;
-    font-family: monospace;
-}
-
-.dark .menu-textarea {
-    background: #1f2937;
-    border-color: #404040;
-    color: white;
 }
