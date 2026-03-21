@@ -2,10 +2,6 @@
     user-select: none;
 }
 
-input, textarea {
-    user-select: text;
-}
-
 html, body {
     height: 100%;
     margin: 0;
@@ -146,9 +142,6 @@ html, body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 8px;
-    margin-bottom: 8px;
-    border-bottom: 1px solid rgba(255,255,255,0.2);
 }
 
 .block-header > div {
@@ -172,23 +165,6 @@ html, body {
 
 .block-header button:hover {
     color: #e5e7eb;
-}
-
-.block-textarea {
-    width: 100%;
-    padding: 8px;
-    background: rgba(255,255,255,0.1);
-    color: white;
-    border-radius: 8px;
-    resize: vertical;
-    font-family: monospace;
-    margin-top: 8px;
-    border: none;
-}
-
-.block-textarea:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.5);
 }
 
 .block-id {
@@ -292,4 +268,83 @@ html, body {
     flex-direction: column;
     height: 100%;
     min-height: 0;
+}
+
+.block-menu {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    padding: 8px;
+    z-index: 10000;
+}
+
+.dark .block-menu {
+    background: #2d2d2d;
+    border-color: #404040;
+}
+
+.menu-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.menu-input {
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 200px;
+}
+
+.dark .menu-input {
+    background: #1f2937;
+    border-color: #404040;
+    color: white;
+}
+
+.menu-save-btn {
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.menu-save-btn:hover {
+    background: #2563eb;
+}
+
+.block-text-display {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.block-additional-text {
+    display: block;
+    color: rgba(255,255,255,0.9);
+}
+
+.menu-textarea {
+    padding: 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 250px;
+    resize: vertical;
+    font-family: monospace;
+}
+
+.dark .menu-textarea {
+    background: #1f2937;
+    border-color: #404040;
+    color: white;
 }

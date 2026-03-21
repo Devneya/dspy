@@ -1,67 +1,108 @@
-function saveBlocksToLocalStorage(blockIds) {
-    const blocksData = [];
-    const blocks = document.querySelectorAll('.workspace-block');
-    blocks.forEach(block => {
-        const id = block.id;
-        const textarea = block.querySelector('textarea');
-        blocksData.push({
-            id: id,
-            text: textarea ? textarea.value : ''
-        });
+function showContextMenu(event, blockId) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const existingMenu = document.querySelector('.block-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const block = document.getElementById(blockId);
+    const textSpan = block ? block.querySelector('.block-additional-text') : null;
+    const currentText = textSpan ? textSpan.textContent : '';
+    
+    const menu = document.createElement('div');
+    menu.className = 'block-menu';
+    menu.innerHTML = `
+        <div class="menu-item">
+            <textarea id="block-text-input" rows="3" placeholder="Enter additional text..." class="menu-textarea">${currentText === 'No additional text' ? '' : currentText.replace(/"/g, '&quot;')}</textarea>
+            <button id="save-text-btn" class="menu-save-btn">Save</button>
+        </div>
+    `;
+    
+    menu.style.position = 'fixed';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    
+    const input = menu.querySelector('#block-text-input');
+    input.focus();
+    
+    const saveBtn = menu.querySelector('#save-text-btn');
+    saveBtn.addEventListener('click', () => {
+        const newText = input.value.trim();
+        if (textSpan) {
+            if (newText) {
+                textSpan.textContent = newText;
+            } else {
+                textSpan.textContent = "No additional text";
+            }
+            
+            const savedTexts = localStorage.getItem('dspy_block_texts') || '{}';
+            const texts = JSON.parse(savedTexts);
+            texts[blockId] = newText;
+            localStorage.setItem('dspy_block_texts', JSON.stringify(texts));
+            
+            fetch(`/update-text/${blockId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `text=${encodeURIComponent(newText)}`
+            });
+        }
+        menu.remove();
     });
-    localStorage.setItem('dspy_blocks_order', JSON.stringify(blockIds));
-    localStorage.setItem('dspy_blocks_text', JSON.stringify(blocksData));
+    
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            saveBtn.click();
+        }
+    });
+    
+    function closeMenu(e) {
+        if (!menu.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+            document.removeEventListener('contextmenu', closeMenu);
+        }
+    }
+    
+    document.body.appendChild(menu);
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+        document.addEventListener('contextmenu', closeMenu);
+    }, 0);
 }
 
-function saveTextToLocalStorage(blockId, text) {
-    const savedTexts = localStorage.getItem('dspy_blocks_text');
-    let texts = savedTexts ? JSON.parse(savedTexts) : [];
-    const existingIndex = texts.findIndex(item => item.id === blockId);
-    if (existingIndex >= 0) {
-        texts[existingIndex].text = text;
-    } else {
-        texts.push({id: blockId, text: text});
-    }
-    localStorage.setItem('dspy_blocks_text', JSON.stringify(texts));
+window.showContextMenu = showContextMenu;
+
+function saveBlocksToLocalStorage(blockIds) {
+    localStorage.setItem('dspy_blocks_order', JSON.stringify(blockIds));
     
-    const savedOrder = localStorage.getItem('dspy_blocks_order');
-    if (savedOrder) {
-        const order = JSON.parse(savedOrder);
-        const blocksData = [];
+    const blocks = document.querySelectorAll('.workspace-block');
+    const texts = {};
+    blocks.forEach(block => {
+        const id = block.id;
+        const textSpan = block.querySelector('.block-additional-text');
+        if (textSpan && textSpan.textContent !== "No additional text") {
+            texts[id] = textSpan.textContent;
+        }
+    });
+    localStorage.setItem('dspy_block_texts', JSON.stringify(texts));
+}
+
+function loadTextsFromLocalStorage() {
+    const savedTexts = localStorage.getItem('dspy_block_texts');
+    if (savedTexts) {
+        const texts = JSON.parse(savedTexts);
         const blocks = document.querySelectorAll('.workspace-block');
         blocks.forEach(block => {
             const id = block.id;
-            const blockTextarea = block.querySelector('textarea');
-            blocksData.push({
-                id: id,
-                text: blockTextarea ? blockTextarea.value : ''
-            });
-        });
-        localStorage.setItem('dspy_blocks_text', JSON.stringify(blocksData));
-    }
-}
-
-function loadBlockTexts() {
-    const savedTexts = localStorage.getItem('dspy_blocks_text');
-    if (savedTexts) {
-        const texts = JSON.parse(savedTexts);
-        texts.forEach(item => {
-            const textarea = document.getElementById(`textarea-${item.id}`);
-            if (textarea) {
-                textarea.value = item.text;
+            if (texts[id]) {
+                const textSpan = block.querySelector('.block-additional-text');
+                if (textSpan) {
+                    textSpan.textContent = texts[id];
+                }
             }
-        });
-    }
-}
-
-function loadBlocksFromLocalStorage() {
-    const savedOrder = localStorage.getItem('dspy_blocks_order');
-    if (savedOrder) {
-        const blockIds = JSON.parse(savedOrder);
-        htmx.ajax('POST', '/reorder', {
-            target: '#ws',
-            values: {order: JSON.stringify(blockIds)},
-            swap: 'outerHTML'
         });
     }
 }
@@ -120,35 +161,28 @@ function initSortable() {
     });
 }
 
-function attachTextareaListeners() {
-    const textareas = document.querySelectorAll('.workspace-block textarea');
-    textareas.forEach(textarea => {
-        const blockId = textarea.closest('.workspace-block').id;
-        textarea.removeEventListener('input', textarea._listener);
-        textarea._listener = () => {
-            const text = textarea.value;
-            saveTextToLocalStorage(blockId, text);
-        };
-        textarea.addEventListener('input', textarea._listener);
-    });
-}
-
 document.body.addEventListener('htmx:afterSwap', (evt) => {
     if (evt.detail.target && evt.detail.target.id === 'ws') {
         setTimeout(() => {
-            const area = document.getElementById('working-area');
-            if (area) {
-                loadBlockTexts();
-                attachTextareaListeners();
-                const order = Array.from(area.children).map(c => c.id);
-                saveBlocksToLocalStorage(order);
-            }
+            loadTextsFromLocalStorage();
             initSortable();
         }, 10);
     }
 });
 
 initSortable();
-loadBlocksFromLocalStorage();
-loadBlockTexts();
-attachTextareaListeners();
+
+if (!window.initialLoadDone) {
+    window.initialLoadDone = true;
+    const savedOrder = localStorage.getItem('dspy_blocks_order');
+    if (savedOrder) {
+        const blockIds = JSON.parse(savedOrder);
+        htmx.ajax('POST', '/reorder', {
+            target: '#ws',
+            values: {order: JSON.stringify(blockIds)},
+            swap: 'outerHTML'
+        });
+    } else {
+        loadTextsFromLocalStorage();
+    }
+}

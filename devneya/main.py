@@ -1,5 +1,6 @@
 from fasthtml.common import *
 from monsterui.all import *
+import json
 
 app, rt = fast_app(
     live=False,
@@ -12,27 +13,28 @@ app, rt = fast_app(
     )
 )
 
-BLOCK_TYPES = {
-    "bestofn",
-    "chainofthought",
-    "codeact",
-    "predict",
-    "programofthought",
-    "react",
-    "refine",
-    "rlm",
-    "multichaincomparison"
-}
+BLOCK_TYPES = ["bestofn", 
+               "chainofthought", 
+               "codeact", 
+               "predict", 
+               "programofthought", 
+               "react", 
+               "refine", 
+               "rlm", 
+               "multichaincomparison"]
 
 blocks = []
+block_id = 1
 
 class Block:
     def __init__(self, block_type, position, text=""):
-        self.id = f"b{len(blocks)}-{block_type}"
+        global block_id
+        self.id = f"b{block_id}"
         self.type = block_type
         self.position = position
         self.label = block_type
-        self.text = text
+        self.additional_text = text
+        block_id += 1
 
 def render_palette():
     return Div(
@@ -40,7 +42,7 @@ def render_palette():
         *[Div(
             Card(
                 Span(block_type, cls="block-label"),
-                cls=f"block-card bg-primary text-white",
+                cls="block-card",
             ),
             draggable="true",
             **{"data-block-type": block_type},
@@ -69,21 +71,21 @@ def render_workspace():
                 ),
                 Button(
                     UkIcon("x", height=16),
-                    hx_delete=f"/rm/{b.id}",
+                    hx_post=f"/rm/{b.id}",
                     hx_target="#ws",
                     hx_swap="outerHTML"
                 ),
                 cls="block-header"
             ),
-            Textarea(
-                b.text,
-                id=f"textarea-{b.id}",
-                **{"data-block-id": b.id},
-                cls="block-textarea"
+            Div(
+                Span(b.additional_text if b.additional_text else "No additional text", 
+                     cls="block-additional-text"),
+                cls="block-text-display"
             ),
             id=b.id,
             draggable="false",
-            cls=f"workspace-block block-{b.type}"
+            cls=f"workspace-block block-{b.type}",
+            **{"oncontextmenu": f"showContextMenu(event, '{b.id}'); return false;"}
         ) for b in sorted(blocks, key=lambda x: x.position)],
         id="working-area",
         cls="workspace"
@@ -121,15 +123,23 @@ def get():
     )
 
 @rt("/add/{btype}")
-def post(btype: str):
+def add_block(btype: str):
     if btype not in BLOCK_TYPES:
         return render_ws()
     blocks.append(Block(btype, len(blocks)))
     return render_ws()
 
+@rt("/update-text/{bid}")
+def update_text(bid: str, text: str):
+    global blocks
+    for block in blocks:
+        if block.id == bid:
+            block.additional_text = text
+            break
+    return render_ws()
+
 @rt("/reorder")
-def post(order: str):
-    import json
+def reorder(order: str):
     global blocks
     try:
         o = json.loads(order)
@@ -144,13 +154,13 @@ def post(order: str):
     return render_ws()
 
 @rt("/clear")
-def post():
+def clear():
     global blocks
     blocks.clear()
     return render_ws()
 
 @rt("/rm/{bid}")
-def delete(bid: str):
+def delete_block(bid: str):
     global blocks
     blocks = [b for b in blocks if b.id != bid]
     for i, b in enumerate(blocks):
