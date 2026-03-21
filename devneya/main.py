@@ -1,6 +1,7 @@
 from fasthtml.common import *
 from monsterui.all import *
 import json
+import os
 
 BLOCK_TYPES = ["bestofn", "chainofthought", "codeact", "predict", 
                "programofthought", "react", "refine", "rlm", "multichaincomparison"]
@@ -162,4 +163,6 @@ def delete_block(bid: str):
     return render_ws()
 
 if __name__ == "__main__":
-    serve(host="127.0.0.1", port=5001)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 5001))
+    serve(host=host, port=port)
