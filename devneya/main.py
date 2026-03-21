@@ -13,15 +13,15 @@ app, rt = fast_app(
 )
 
 BLOCK_TYPES = {
-    "bestofn": {"color": "bg-red-500", "label": "BestOfN"},
-    "chainofthought": {"color": "bg-blue-500", "label": "ChainOfThought"},
-    "codeact": {"color": "bg-green-500", "label": "CodeAct"},
-    "predict": {"color": "bg-yellow-500", "label": "Predict"},
-    "programofthought": {"color": "bg-purple-500", "label": "ProgramOfThought"},
-    "react": {"color": "bg-pink-500", "label": "ReAct"},
-    "refine": {"color": "bg-indigo-500", "label": "Refine"},
-    "rlm": {"color": "bg-teal-500", "label": "RLM"},
-    "multichaincomparison": {"color": "bg-orange-500", "label": "MultiChainComparison"}
+    "bestofn",
+    "chainofthought",
+    "codeact",
+    "predict",
+    "programofthought",
+    "react",
+    "refine",
+    "rlm",
+    "multichaincomparison"
 }
 
 blocks = []
@@ -31,23 +31,22 @@ class Block:
         self.id = f"b{len(blocks)}-{block_type}"
         self.type = block_type
         self.position = position
-        self.color = BLOCK_TYPES[block_type]["color"]
-        self.label = BLOCK_TYPES[block_type]["label"]
+        self.label = block_type
         self.text = text
 
 def render_palette():
     return Div(
-        H3("DSPy Modules", cls="font-bold text-lg mb-4 text-center"),
+        H3("DSPy Modules", cls="palette-title"),
         *[Div(
             Card(
-                Span(info["label"], cls="font-medium"),
-                cls=f"{info['color']} text-white",
+                Span(block_type, cls="block-label"),
+                cls=f"block-card bg-primary text-white",
             ),
             draggable="true",
             **{"data-block-type": block_type},
-            cls="draggable-item mb-3 p-2 rounded-lg cursor-grab"
-        ) for block_type, info in BLOCK_TYPES.items()],
-        cls="bg-gray-100 dark:bg-gray-800 p-4 rounded-xl border-2 border-gray-200 dark:border-gray-700 mr-6 palette-scroll",
+            cls="draggable-item"
+        ) for block_type in BLOCK_TYPES],
+        cls="palette-scroll",
         id="palette"
     )
 
@@ -55,60 +54,53 @@ def render_workspace():
     if not blocks:
         return Div(
             DivCentered(
-                P("Drop modules here", cls="text-gray-400 dark:text-gray-500 text-lg"),
+                P("Drop modules here", cls="empty-message"),
             ),
             id="working-area", 
-            cls="flex items-center justify-center  bg-gray-50 dark:bg-gray-900 rounded-xl border-3 border-dashed border-gray-300 dark:border-gray-700 p-6"
+            cls="empty-workspace"
         )
     
     return Div(
         *[Div(
             Div(
                 Div(
-                    Span(b.label, cls="font-medium"),
+                    Span(b.label, cls="block-label"),
                     Span(b.id, cls="block-id"),
-                    cls="flex items-center flex-1"
                 ),
                 Button(
-                    UkIcon("x", height=16), 
-                    cls="text-white hover:text-gray-200",
-                    hx_delete=f"/rm/{b.id}", 
-                    hx_target="#ws", 
+                    UkIcon("x", height=16),
+                    hx_delete=f"/rm/{b.id}",
+                    hx_target="#ws",
                     hx_swap="outerHTML"
                 ),
-                cls="flex items-center justify-between p-3 border-b border-white/20"
+                cls="block-header"
             ),
             Textarea(
                 b.text,
-                cls="w-full p-2 mt-2 bg-white/10 text-white rounded-lg resize-y focus:outline-none focus:ring-2 focus:ring-white/50",
                 id=f"textarea-{b.id}",
-                **{"data-block-id": b.id}
+                **{"data-block-id": b.id},
+                cls="block-textarea"
             ),
             id=b.id,
             draggable="false",
-            cls=f"{b.color} text-white rounded-lg shadow-md mb-2 cursor-grab workspace-block p-3"
+            cls=f"workspace-block block-{b.type}"
         ) for b in sorted(blocks, key=lambda x: x.position)],
         id="working-area",
-        cls="p-2 bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700"
+        cls="workspace"
     )
 
 def render_ws():
     return Div(
-        Div(
-            H3("Workspace", cls="font-bold text-xl"),
-            cls="flex justify-between items-center mb-4"
-        ),
+        Div(H3("Workspace", cls="workspace-title")),
         render_workspace(),
         Div(
-            Button("Clear All", 
-                   cls="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg clear-btn",
-                   hx_post="/clear", 
-                   hx_target="#ws", 
-                   hx_swap="outerHTML"),
-            cls="mt-4"
+            Button("Clear All",
+                   hx_post="/clear",
+                   hx_target="#ws",
+                   hx_swap="outerHTML",
+                   cls="clear-btn"),
         ),
-        id="ws",
-        cls="w-full h-full"
+        id="ws"
     )
 
 @rt("/")
@@ -117,14 +109,14 @@ def get():
         Button(
             UkIcon("sun", cls="light-icon"),
             UkIcon("moon", cls="dark-icon"),
-            cls="fixed top-5 right-5 z-1000 p-2 rounded-lg bg-gray-200 dark:bg-gray-700 theme-toggle-btn",
+            cls="theme-toggle-btn",
             onclick="document.documentElement.classList.toggle('dark')"
         ),
-        H1("DSPy Module Arranger", cls="font-bold text-4xl text-center my-6"),
+        H1("DSPy Module Arranger", cls="main-title"),
         Div(
-            render_palette(), 
-            Div(render_ws(), cls="flex-1 w-full"), 
-            cls="flex items-stretch"
+            render_palette(),
+            Div(render_ws(), cls="workspace-container"),
+            cls="main-container"
         ),
     )
 
