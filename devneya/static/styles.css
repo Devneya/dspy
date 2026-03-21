@@ -1,0 +1,93 @@
+* {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
+[draggable="true"]:active,
+.workspace-block:active {
+    opacity: 0.7;
+    cursor: grabbing !important;
+    transform: scale(0.98);
+    transition: transform 0.05s ease;
+}
+
+[draggable="true"]:active,
+[draggable="true"]:focus,
+[draggable="true"]:focus-visible,
+.workspace-block:active,
+.workspace-block:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+::-webkit-drag {
+    background: transparent;
+}
+
+.palette-scroll {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+    position: sticky;
+    top: 20px;
+    width: 280px;
+}
+
+.palette-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.palette-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.palette-scroll::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+.palette-scroll::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.block-card, .block-item, .workspace-block, .draggable-item > div, 
+button, .uk-button, .clear-btn, .theme-toggle-btn {
+    border-radius: 12px !important;
+}
+
+.draggable-item .card, .draggable-item div[class*="bg-"] {
+    border-radius: 12px !important;
+}
+
+.theme-toggle-btn {
+    border-radius: 12px !important;
+    padding: 8px 12px !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.light-icon { display: inline; }
+.dark-icon { display: none; }
+.dark .light-icon { display: none; }
+.dark .dark-icon { display: inline; }
+
+.block-id {
+    font-size: 0.7rem;
+    opacity: 0.8;
+    background: rgba(0,0,0,0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 8px;
+    font-family: monospace;
+}

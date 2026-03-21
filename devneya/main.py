@@ -6,98 +6,22 @@ app, rt = fast_app(
     hdrs=(
         Theme.blue.headers(),
         Meta(name="live-reload", content="disabled"),
-        Style("""
-            * {
-                -webkit-user-select: none;
-                -moz-user-select: none;
-                -ms-user-select: none;
-                user-select: none;
-                -webkit-touch-callout: none;
-            }
-            input, textarea, [contenteditable="true"] {
-                -webkit-user-select: text;
-                -moz-user-select: text;
-                -ms-user-select: text;
-                user-select: text;
-            }
-
-            .palette-scroll {
-                max-height: calc(100vh - 180px);
-                overflow-y: auto;
-                position: sticky;
-                top: 20px;
-                width: 280px;
-            }
-
-            .palette-scroll::-webkit-scrollbar {
-                width: 6px;
-            }
-            .palette-scroll::-webkit-scrollbar-track {
-                background: #f1f1f1;
-                border-radius: 10px;
-            }
-            .palette-scroll::-webkit-scrollbar-thumb {
-                background: #888;
-                border-radius: 10px;
-            }
-            .palette-scroll::-webkit-scrollbar-thumb:hover {
-                background: #555;
-            }
-            
-            .block-card, .block-item, .workspace-block, .draggable-item > div, 
-            button, .uk-button, .clear-btn, .theme-toggle-btn {
-                border-radius: 12px !important;
-            }
-            
-            .draggable-item .card, .draggable-item div[class*="bg-"] {
-                border-radius: 12px !important;
-            }
-            
-            .theme-toggle-btn {
-                border-radius: 12px !important;
-                padding: 8px 12px !important;
-            }
-        """)
+        Link(rel="stylesheet", href="/static/styles.css"),
+        Script(src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js", defer=True),
+        Script(src="/static/scripts.js", defer=True),
     )
 )
 
 BLOCK_TYPES = {
-    "bestofn": {
-        "color": "bg-red-500",
-        "label": "BestOfN",
-    },
-    "chainofthought": {
-        "color": "bg-blue-500",
-        "label": "ChainOfThought",
-    },
-    "codeact": {
-        "color": "bg-green-500",
-        "label": "CodeAct",
-    },
-    "predict": {
-        "color": "bg-yellow-500",
-        "label": "Predict",
-    },
-    "programofthought": {
-        "color": "bg-purple-500",
-        "label": "ProgramOfThought",
-    },
-    "react": {
-        "color": "bg-pink-500",
-        "label": "ReAct",
-    },
-    "refine": {
-        "color": "bg-indigo-500",
-        "label": "Refine",
-    },
-    "rlm": {
-        "color": "bg-teal-500",
-        "label": "RLM",
-    },
-    "multichaincomparison": {
-        "color": "bg-orange-500",
-        "label": "MultiChainComparison",
-    }
+    "bestofn": {"color": "bg-red-500", "label": "BestOfN"},
+    "chainofthought": {"color": "bg-blue-500", "label": "ChainOfThought"},
+    "codeact": {"color": "bg-green-500", "label": "CodeAct"},
+    "predict": {"color": "bg-yellow-500", "label": "Predict"},
+    "programofthought": {"color": "bg-purple-500", "label": "ProgramOfThought"},
+    "react": {"color": "bg-pink-500", "label": "ReAct"},
+    "refine": {"color": "bg-indigo-500", "label": "Refine"},
+    "rlm": {"color": "bg-teal-500", "label": "RLM"},
+    "multichaincomparison": {"color": "bg-orange-500", "label": "MultiChainComparison"}
 }
 
 blocks = []
@@ -112,10 +36,10 @@ class Block:
 
 def render_palette():
     return Div(
-        H3("DSPy Modules", cls="text-lg mb-4 text-center"),
+        H3("DSPy Modules", cls="font-bold text-lg mb-4 text-center"),
         *[Div(
             Card(
-                Span(info["label"], cls="font-medium block-card"),
+                Span(info["label"], cls="font-medium"),
                 cls=f"{info['color']} text-white",
             ),
             draggable="true",
@@ -129,7 +53,10 @@ def render_palette():
 def render_workspace():
     if not blocks:
         return Div(
-            P("Drop modules here", cls="text-gray-400 dark:text-gray-500 text-lg"), 
+            DivCentered(
+                P("Drop modules here", cls="text-gray-400 dark:text-gray-500 text-lg"),
+                cls="min-h-[400px]"
+            ),
             id="working-area", 
             cls="flex items-center justify-center min-h-[400px] bg-gray-50 dark:bg-gray-900 rounded-xl border-3 border-dashed border-gray-300 dark:border-gray-700 p-6"
         )
@@ -137,13 +64,19 @@ def render_workspace():
     return Div(
         *[Div(
             Div(
-                Span(b.label, cls="flex-1 font-medium block-item"),
-                Button(UkIcon("x", height=16), 
-                       cls="text-white hover:text-gray-200",
-                       hx_delete=f"/rm/{b.id}", 
-                       hx_target="#ws", 
-                       hx_swap="outerHTML"),
-                cls="flex items-center justify-between p-3"
+                Div(
+                    Span(b.label, cls="font-medium"),
+                    Span(b.id, cls="block-id"),
+                    cls="flex items-center flex-1"
+                ),
+                Button(
+                    UkIcon("x", height=16), 
+                    cls="text-white hover:text-gray-200",
+                    hx_delete=f"/rm/{b.id}", 
+                    hx_target="#ws", 
+                    hx_swap="outerHTML"
+                ),
+                cls="flex items-center justify-between p-3 w-full"
             ),
             id=b.id,
             draggable="false",
@@ -155,9 +88,9 @@ def render_workspace():
 
 def render_ws():
     return Div(
-        H3("Workspace", cls="text-xl font-bold mb-4"),
+        H3("Workspace", cls="font-bold text-xl mb-4"),
         Button("Clear All", 
-               cls=ButtonT.destructive + " mb-4 clear-btn",
+               cls="bg-red-600 hover:bg-red-700 text-white font-medium mb-4 clear-btn",
                hx_post="/clear", 
                hx_target="#ws", 
                hx_swap="outerHTML"),
@@ -169,80 +102,17 @@ def render_ws():
 def get():
     return Container(
         Button(
-            UkIcon("sun"),
+            UkIcon("sun", cls="light-icon"),
+            UkIcon("moon", cls="dark-icon"),
             cls="fixed top-5 right-5 z-1000 p-2 rounded-lg bg-gray-200 dark:bg-gray-700 theme-toggle-btn",
             onclick="document.documentElement.classList.toggle('dark')"
         ),
-        H1("DSPy Module Arranger", cls="text-3xl font-bold text-center my-6"),
+        H1("DSPy Module Arranger", cls="font-bold text-4xl text-center my-6"),
         Div(
             render_palette(), 
             Div(render_ws(), cls="flex-1"), 
             cls="flex"
         ),
-        Script(src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"),
-        Script("""
-            document.addEventListener('dragstart', e => {
-                const item = e.target.closest('[draggable="true"]');
-                if (item && item.dataset.blockType) {
-                    e.dataTransfer.setData('text/plain', item.dataset.blockType);
-                    e.dataTransfer.effectAllowed = 'copy';
-                }
-            });
-            
-            document.addEventListener('dragover', e => e.preventDefault());
-            
-            let isDropping = false;
-            document.addEventListener('drop', e => {
-                const zone = e.target.closest('#working-area');
-                if (!zone) return;
-                e.preventDefault();
-                
-                if (isDropping) return;
-                
-                const type = e.dataTransfer.getData('text/plain');
-                // Accept only the nine module keys
-                const validTypes = new Set([
-                    "bestofn", "chainofthought", "codeact", "predict",
-                    "programofthought", "react", "refine", "rlm", "multichaincomparison"
-                ]);
-                if (validTypes.has(type)) {
-                    isDropping = true;
-                    htmx.ajax('POST', `/add/${type}`, {
-                        target: '#ws',
-                        swap: 'outerHTML'
-                    }).then(() => { isDropping = false; })
-                      .catch(() => { isDropping = false; });
-                }
-            });
-            
-            function initSortable() {
-                const area = document.getElementById('working-area');
-                if (!area) return;
-                
-                if (area._sortable) area._sortable.destroy();
-                
-                area._sortable = new Sortable(area, {
-                    animation: 200,
-                    handle: '.workspace-block',
-                    onEnd: () => {
-                        const order = Array.from(area.children).map(c => c.id);
-                        htmx.ajax('POST', '/reorder', {
-                            target: '#ws',
-                            values: {order: JSON.stringify(order)},
-                            swap: 'outerHTML'
-                        });
-                    }
-                });
-            }
-            
-            initSortable();
-            
-            document.body.addEventListener('htmx:afterSwap', (evt) => {
-                if (evt.detail.target && evt.detail.target.id === 'ws') {
-                    setTimeout(initSortable, 10);
-                }
-            });
-        """)
     )
 
 @rt("/add/{btype}")
