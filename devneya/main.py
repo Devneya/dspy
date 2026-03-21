@@ -76,7 +76,7 @@ def render_block(block):
             cls="block-header"
         ),
         Div(
-            Span(block.additional_text if block.additional_text else "Space for dspy module settings", 
+            Span(block.additional_text if block.additional_text else "placeholder for dspy module signature input", 
                  cls="block-additional-text"),
             cls="block-text-display"
         ),

@@ -29,7 +29,7 @@ const Storage = {
         blocks.forEach(block => {
             const textSpan = block.querySelector('.block-additional-text');
             const text = textSpan?.textContent;
-            if (text && text !== "Space for dspy module settings") {
+            if (text && text !== "placeholder for dspy module signature input") {
                 texts[block.id] = text;
             }
         });
@@ -38,7 +38,7 @@ const Storage = {
     
     updateText(blockId, text) {
         const data = this.load();
-        if (text && text !== "Space for dspy module settings") {
+        if (text && text !== "placeholder for dspy module signature input") {
             data.texts[blockId] = text;
         } else {
             delete data.texts[blockId];
@@ -78,7 +78,7 @@ function showContextMenu(event, blockId) {
     
     const block = document.getElementById(blockId);
     const textSpan = block?.querySelector('.block-additional-text');
-    const currentText = textSpan?.textContent === "Space for dspy module settings" ? '' : (textSpan?.textContent || '');
+    const currentText = textSpan?.textContent === "placeholder for dspy module signature input" ? '' : (textSpan?.textContent || '');
     
     const menu = document.createElement('div');
     menu.className = 'block-menu';
@@ -136,7 +136,7 @@ UI.updateBlockText = function(blockId, text) {
     const block = document.getElementById(blockId);
     const textSpan = block?.querySelector('.block-additional-text');
     if (textSpan) {
-        textSpan.textContent = text || "No additional text";
+        textSpan.textContent = text;
     }
 };
 
