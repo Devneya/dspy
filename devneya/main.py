@@ -89,12 +89,12 @@ def render_workspace():
 def render_ws():
     return Div(
         H3("Workspace", cls="font-bold text-xl mb-4"),
+        render_workspace(),
         Button("Clear All", 
-               cls="bg-red-600 hover:bg-red-700 text-white font-medium mb-4 clear-btn",
-               hx_post="/clear", 
-               hx_target="#ws", 
-               hx_swap="outerHTML"),
-        render_workspace(), 
+            cls="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg clear-btn mt-4",
+            hx_post="/clear", 
+            hx_target="#ws", 
+            hx_swap="outerHTML"),
         id="ws"
     )
 

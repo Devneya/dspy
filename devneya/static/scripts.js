@@ -1,3 +1,19 @@
+function saveBlocksToLocalStorage(blockIds) {
+    localStorage.setItem('dspy_blocks_order', JSON.stringify(blockIds));
+}
+
+function loadBlocksFromLocalStorage() {
+    const savedOrder = localStorage.getItem('dspy_blocks_order');
+    if (savedOrder) {
+        const blockIds = JSON.parse(savedOrder);
+        htmx.ajax('POST', '/reorder', {
+            target: '#ws',
+            values: {order: JSON.stringify(blockIds)},
+            swap: 'outerHTML'
+        });
+    }
+}
+
 document.addEventListener('dragstart', e => {
     const item = e.target.closest('[draggable="true"]');
     if (item && item.dataset.blockType) {
@@ -42,6 +58,7 @@ function initSortable() {
         handle: '.workspace-block',
         onEnd: () => {
             const order = Array.from(area.children).map(c => c.id);
+            saveBlocksToLocalStorage(order);
             htmx.ajax('POST', '/reorder', {
                 target: '#ws',
                 values: {order: JSON.stringify(order)},
@@ -51,10 +68,18 @@ function initSortable() {
     });
 }
 
-initSortable();
-
 document.body.addEventListener('htmx:afterSwap', (evt) => {
     if (evt.detail.target && evt.detail.target.id === 'ws') {
-        setTimeout(initSortable, 10);
+        setTimeout(() => {
+            const area = document.getElementById('working-area');
+            if (area) {
+                const order = Array.from(area.children).map(c => c.id);
+                saveBlocksToLocalStorage(order);
+            }
+            initSortable();
+        }, 10);
     }
 });
+
+initSortable();
+loadBlocksFromLocalStorage();
