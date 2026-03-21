@@ -27,12 +27,13 @@ BLOCK_TYPES = {
 blocks = []
 
 class Block:
-    def __init__(self, block_type, position):
+    def __init__(self, block_type, position, text=""):
         self.id = f"b{len(blocks)}-{block_type}"
         self.type = block_type
         self.position = position
         self.color = BLOCK_TYPES[block_type]["color"]
         self.label = BLOCK_TYPES[block_type]["label"]
+        self.text = text
 
 def render_palette():
     return Div(
@@ -55,10 +56,9 @@ def render_workspace():
         return Div(
             DivCentered(
                 P("Drop modules here", cls="text-gray-400 dark:text-gray-500 text-lg"),
-                cls="min-h-[400px]"
             ),
             id="working-area", 
-            cls="flex items-center justify-center min-h-[400px] bg-gray-50 dark:bg-gray-900 rounded-xl border-3 border-dashed border-gray-300 dark:border-gray-700 p-6"
+            cls="flex items-center justify-center  bg-gray-50 dark:bg-gray-900 rounded-xl border-3 border-dashed border-gray-300 dark:border-gray-700 p-6"
         )
     
     return Div(
@@ -76,26 +76,39 @@ def render_workspace():
                     hx_target="#ws", 
                     hx_swap="outerHTML"
                 ),
-                cls="flex items-center justify-between p-3 w-full"
+                cls="flex items-center justify-between p-3 border-b border-white/20"
+            ),
+            Textarea(
+                b.text,
+                cls="w-full p-2 mt-2 bg-white/10 text-white rounded-lg resize-y focus:outline-none focus:ring-2 focus:ring-white/50",
+                id=f"textarea-{b.id}",
+                **{"data-block-id": b.id}
             ),
             id=b.id,
             draggable="false",
-            cls=f"{b.color} text-white rounded-lg shadow-md mb-2 cursor-grab workspace-block"
+            cls=f"{b.color} text-white rounded-lg shadow-md mb-2 cursor-grab workspace-block p-3"
         ) for b in sorted(blocks, key=lambda x: x.position)],
         id="working-area",
-        cls="p-2 min-h-[400px] bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700"
+        cls="p-2 bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700"
     )
 
 def render_ws():
     return Div(
-        H3("Workspace", cls="font-bold text-xl mb-4"),
+        Div(
+            H3("Workspace", cls="font-bold text-xl"),
+            cls="flex justify-between items-center mb-4"
+        ),
         render_workspace(),
-        Button("Clear All", 
-            cls="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg clear-btn mt-4",
-            hx_post="/clear", 
-            hx_target="#ws", 
-            hx_swap="outerHTML"),
-        id="ws"
+        Div(
+            Button("Clear All", 
+                   cls="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg clear-btn",
+                   hx_post="/clear", 
+                   hx_target="#ws", 
+                   hx_swap="outerHTML"),
+            cls="mt-4"
+        ),
+        id="ws",
+        cls="w-full h-full"
     )
 
 @rt("/")
@@ -110,8 +123,8 @@ def get():
         H1("DSPy Module Arranger", cls="font-bold text-4xl text-center my-6"),
         Div(
             render_palette(), 
-            Div(render_ws(), cls="flex-1"), 
-            cls="flex"
+            Div(render_ws(), cls="flex-1 w-full"), 
+            cls="flex items-stretch"
         ),
     )
 

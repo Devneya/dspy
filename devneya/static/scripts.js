@@ -1,5 +1,57 @@
 function saveBlocksToLocalStorage(blockIds) {
+    const blocksData = [];
+    const blocks = document.querySelectorAll('.workspace-block');
+    blocks.forEach(block => {
+        const id = block.id;
+        const textarea = block.querySelector('textarea');
+        blocksData.push({
+            id: id,
+            text: textarea ? textarea.value : ''
+        });
+    });
     localStorage.setItem('dspy_blocks_order', JSON.stringify(blockIds));
+    localStorage.setItem('dspy_blocks_text', JSON.stringify(blocksData));
+}
+
+function saveTextToLocalStorage(blockId, text) {
+    const savedTexts = localStorage.getItem('dspy_blocks_text');
+    let texts = savedTexts ? JSON.parse(savedTexts) : [];
+    const existingIndex = texts.findIndex(item => item.id === blockId);
+    if (existingIndex >= 0) {
+        texts[existingIndex].text = text;
+    } else {
+        texts.push({id: blockId, text: text});
+    }
+    localStorage.setItem('dspy_blocks_text', JSON.stringify(texts));
+    
+    const savedOrder = localStorage.getItem('dspy_blocks_order');
+    if (savedOrder) {
+        const order = JSON.parse(savedOrder);
+        const blocksData = [];
+        const blocks = document.querySelectorAll('.workspace-block');
+        blocks.forEach(block => {
+            const id = block.id;
+            const blockTextarea = block.querySelector('textarea');
+            blocksData.push({
+                id: id,
+                text: blockTextarea ? blockTextarea.value : ''
+            });
+        });
+        localStorage.setItem('dspy_blocks_text', JSON.stringify(blocksData));
+    }
+}
+
+function loadBlockTexts() {
+    const savedTexts = localStorage.getItem('dspy_blocks_text');
+    if (savedTexts) {
+        const texts = JSON.parse(savedTexts);
+        texts.forEach(item => {
+            const textarea = document.getElementById(`textarea-${item.id}`);
+            if (textarea) {
+                textarea.value = item.text;
+            }
+        });
+    }
 }
 
 function loadBlocksFromLocalStorage() {
@@ -68,11 +120,26 @@ function initSortable() {
     });
 }
 
+function attachTextareaListeners() {
+    const textareas = document.querySelectorAll('.workspace-block textarea');
+    textareas.forEach(textarea => {
+        const blockId = textarea.closest('.workspace-block').id;
+        textarea.removeEventListener('input', textarea._listener);
+        textarea._listener = () => {
+            const text = textarea.value;
+            saveTextToLocalStorage(blockId, text);
+        };
+        textarea.addEventListener('input', textarea._listener);
+    });
+}
+
 document.body.addEventListener('htmx:afterSwap', (evt) => {
     if (evt.detail.target && evt.detail.target.id === 'ws') {
         setTimeout(() => {
             const area = document.getElementById('working-area');
             if (area) {
+                loadBlockTexts();
+                attachTextareaListeners();
                 const order = Array.from(area.children).map(c => c.id);
                 saveBlocksToLocalStorage(order);
             }
@@ -83,3 +150,5 @@ document.body.addEventListener('htmx:afterSwap', (evt) => {
 
 initSortable();
 loadBlocksFromLocalStorage();
+loadBlockTexts();
+attachTextareaListeners();
