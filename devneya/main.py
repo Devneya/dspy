@@ -1,6 +1,7 @@
 from fasthtml.common import *
 from monsterui.all import *
 import json
+import time
 import os
 
 BLOCK_TYPES = ["bestofn", "chainofthought", "codeact", "predict", 
@@ -19,6 +20,8 @@ app, rt = fast_app(
 
 blocks = []
 block_id = 1
+table_entries = []
+entry_id = 1
 
 class Block:
     def __init__(self, block_type, position, text=""):
@@ -30,6 +33,7 @@ class Block:
         self.additional_text = text
         block_id += 1
 
+# ==================== RENDER FUNCTIONS ====================
 def render_palette():
     return Div(
         H3("DSPy Modules", cls="palette-title"),
@@ -86,6 +90,88 @@ def render_block(block):
         **{"oncontextmenu": f"showContextMenu(event, '{block.id}'); return false;"}
     )
 
+def render_table():
+    if not table_entries:
+        return Div(
+            P("No entries. Add one below.", cls="empty-message"),
+            cls="table-empty"
+        )
+    
+    return Div(
+        Table(
+            Thead(
+                Tr(
+                    Th("Input", cls="table-header"),
+                    Th("Output", cls="table-header"),
+                    Th("", cls="table-header-actions")
+                )
+            ),
+            Tbody(
+                *[Tr(
+                    Td(entry["key"], cls="table-cell"),
+                    Td(entry["value"], cls="table-cell"),
+                    Td(
+                        Button(
+                            UkIcon("trash-2", height=14),
+                            cls="delete-entry-btn",
+                            hx_post=f"/table/delete/{entry['id']}",
+                            hx_target="#table-section",
+                            hx_swap="outerHTML"
+                        ),
+                        cls="table-cell-actions"
+                    )
+                ) for entry in table_entries]
+            ),
+            cls="data-table"
+        ),
+        id="table-body"
+    )
+
+def render_table_section():
+    return Div(
+        Div(
+            H3("Training Examples", cls="table-title"),
+            Button(
+                UkIcon("plus", height=16),
+                " Add",
+                cls="add-entry-btn",
+                hx_get="/table/add-form",
+                hx_target="#table-section",
+                hx_swap="outerHTML"
+            ),
+            cls="table-header-row"
+        ),
+        render_table(),
+        id="table-section"
+    )
+
+def render_add_form():
+    return Div(
+        Div(
+            H3("Training Examples", cls="table-title"),
+            cls="table-header-row"
+        ),
+        Div(
+            Form(
+                Div(
+                    Input(type="text", name="key", placeholder="Input", required=True, cls="form-input"),
+                    Input(type="text", name="value", placeholder="Output", required=True, cls="form-input"),
+                    Button("Save", type="submit", cls="form-save-btn"),
+                    Button("Cancel", cls="form-cancel-btn", 
+                           hx_get="/table/cancel", 
+                           hx_target="#table-section", 
+                           hx_swap="outerHTML"),
+                    cls="form-row"
+                ),
+                hx_post="/table/add",
+                hx_target="#table-section",
+                hx_swap="outerHTML",
+                cls="add-form"
+            ),
+        ),
+        id="table-section"
+    )
+
 def render_ws():
     return Div(
         Div(H3("Workspace", cls="workspace-title")),
@@ -100,20 +186,23 @@ def render_ws():
         id="ws"
     )
 
+# ==================== ROUTES ====================
 @rt("/")
 def get():
     return Container(
+        Meta(name="server-start", content=str(int(time.time()))),
         Button(
             UkIcon("sun", cls="light-icon"),
             UkIcon("moon", cls="dark-icon"),
             cls="theme-toggle-btn",
-            onclick="document.documentElement.classList.toggle('dark')"
+            id="theme-toggle",
         ),
         H1("DSPy Module Builder", cls="main-title"),
         Div(
             render_palette(),
             Div(render_ws(), cls="workspace-container"),
-            cls="main-container"
+            Div(render_table_section(), cls="table-container"),
+            cls="three-column-layout"
         ),
     )
 
@@ -162,5 +251,30 @@ def delete_block(bid: str):
         b.position = i
     return render_ws()
 
+@rt("/table/add-form")
+def get_add_form():
+    return render_add_form()
+
+@rt("/table/cancel")
+def cancel_add():
+    return render_table_section()
+
+@rt("/table/add")
+def add_table_entry(key: str, value: str):
+    global entry_id, table_entries
+    if key and value:
+        table_entries.append({"id": entry_id, "key": key, "value": value})
+        entry_id += 1
+    return render_table_section()
+
+@rt("/table/delete/{entry_id}")
+def delete_table_entry(entry_id: int):
+    global table_entries
+    table_entries = [e for e in table_entries if e["id"] != entry_id]
+    return render_table_section()
+
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "5001"))
+
 if __name__ == "__main__":
-    serve(host="0.0.0.0", port=5001)
+    serve(host=HOST, port=PORT)

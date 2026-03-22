@@ -26,12 +26,35 @@ html, body {
     min-height: 500px;
 }
 
+.three-column-layout {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    height: calc(100vh - 150px);
+    min-height: 500px;
+}
+
 .workspace-container {
     flex: 1;
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
+}
+
+.table-container {
+    width: 320px;
+    flex-shrink: 0;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.dark .table-container {
+    background: #2d2d2d;
+    border-color: #404040;
 }
 
 #ws {
@@ -310,6 +333,153 @@ html, body {
         opacity: 1;
         transform: scale(1);
     }
+}
+
+/* ==================== TABLE STYLES ==================== */
+.table-title {
+    font-weight: bold;
+    font-size: 1.125rem;
+    margin: 0;
+}
+
+.table-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.add-entry-btn {
+    background: #3b82f6;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.add-entry-btn:hover {
+    background: #2563eb;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.table-header {
+    text-align: left;
+    padding: 8px 8px;
+    border-bottom: 2px solid #e2e8f0;
+    font-weight: 600;
+}
+
+.dark .table-header {
+    border-bottom-color: #404040;
+}
+
+.table-cell {
+    padding: 8px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    word-break: break-word;
+}
+
+.dark .table-cell {
+    border-bottom-color: #404040;
+}
+
+.table-cell-actions {
+    padding: 8px 4px;
+    text-align: center;
+    width: 40px;
+}
+
+.delete-entry-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-entry-btn:hover {
+    background: #dc2626;
+}
+
+.table-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #9ca3af;
+}
+
+/* ==================== ADD FORM ==================== */
+.add-form {
+    margin-top: 8px;
+}
+
+.form-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.form-input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+}
+
+.dark .form-input {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: white;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+
+.form-save-btn {
+    background: #10b981;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.form-save-btn:hover {
+    background: #059669;
+}
+
+.form-cancel-btn {
+    background: #6b7280;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.form-cancel-btn:hover {
+    background: #4b5563;
 }
 
 /* ==================== THEME TOGGLE ==================== */
