@@ -1,0 +1,564 @@
+* {
+    user-select: none;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* ==================== LAYOUT ==================== */
+.container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 1rem;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-container {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    height: calc(100vh - 150px);
+    min-height: 500px;
+}
+
+.three-column-layout {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    height: calc(100vh - 150px);
+    min-height: 500px;
+}
+
+.workspace-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.table-container {
+    width: 320px;
+    flex-shrink: 0;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.dark .table-container {
+    background: #2d2d2d;
+    border-color: #404040;
+}
+
+#ws {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+/* ==================== PALETTE ==================== */
+.palette-scroll {
+    width: 280px;
+    height: 100%;
+    overflow-y: auto;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    flex-shrink: 0;
+}
+
+.dark .palette-scroll {
+    background: #2d2d2d;
+    border-color: #404040;
+}
+
+.palette-title {
+    font-weight: bold;
+    font-size: 1.125rem;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+/* ==================== DRAGGABLE ITEMS ==================== */
+.draggable-item {
+    margin-bottom: 12px;
+    cursor: grab;
+}
+
+.draggable-item:active {
+    opacity: 0.7;
+    cursor: grabbing;
+}
+
+.draggable-item .block-card {
+    border-radius: 12px;
+    padding: 8px 12px;
+}
+
+.draggable-item .block-label {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+/* ==================== WORKSPACE ==================== */
+.workspace {
+    height: 100%;
+    background: #f9fafb;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 8px;
+    overflow-y: auto;
+}
+
+.dark .workspace {
+    background: #2d2d2d;
+    border-color: #404040;
+}
+
+.empty-workspace {
+    height: 100%;
+    background: #f9fafb;
+    border: 3px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dark .empty-workspace {
+    background: #2d2d2d;
+    border-color: #555;
+}
+
+.empty-message {
+    color: #9ca3af;
+    font-size: 1.125rem;
+}
+
+.dark .empty-message {
+    color: #6b7280;
+}
+
+.workspace-title {
+    font-weight: bold;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+/* ==================== BLOCKS ==================== */
+.block-card, .workspace-block {
+    background-color: #3b82f6;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.dark .block-card, .dark .workspace-block {
+    background-color: #2563eb;
+}
+
+.workspace-block {
+    border-radius: 12px;
+    margin-bottom: 8px;
+    cursor: grab;
+    padding: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dark .workspace-block {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.workspace-block:active {
+    cursor: grabbing;
+}
+
+.block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.block-header > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.block-label {
+    font-weight: 500;
+}
+
+.block-header button {
+    color: white;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.block-header button:hover {
+    color: #e5e7eb;
+}
+
+.block-id {
+    font-size: 0.7rem;
+    opacity: 0.8;
+    background: rgba(0,0,0,0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-family: monospace;
+}
+
+.block-text-display {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.block-additional-text {
+    display: block;
+    color: rgba(255,255,255,0.9);
+}
+
+/* ==================== CONTEXT MENU ==================== */
+.block-menu {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    padding: 8px;
+    z-index: 10000;
+    min-width: 260px;
+    animation: menuFadeIn 0.15s ease-out;
+    position: fixed;
+}
+
+.dark .block-menu {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+.menu-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ==================== CONTEXT MENU TEXTAREA ==================== */
+.menu-textarea {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: monospace;
+    resize: vertical;
+    background: white;
+    color: #1f2937;
+    transition: all 0.2s ease;
+}
+
+.dark .menu-textarea {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #e5e7eb;
+}
+
+.menu-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+
+.dark .menu-textarea:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 2px rgba(96,165,250,0.2);
+}
+
+.menu-textarea::placeholder {
+    color: #9ca3af;
+}
+
+.dark .menu-textarea::placeholder {
+    color: #6b7280;
+}
+
+/* ==================== MENU SAVE BUTTON ==================== */
+.menu-save-btn {
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.2s ease;
+}
+
+.menu-save-btn:hover {
+    background: #2563eb;
+}
+
+.dark .menu-save-btn {
+    background: #3b82f6;
+}
+
+.dark .menu-save-btn:hover {
+    background: #2563eb;
+}
+
+/* ==================== MENU ANIMATION ==================== */
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ==================== TABLE STYLES ==================== */
+.table-title {
+    font-weight: bold;
+    font-size: 1.125rem;
+    margin: 0;
+}
+
+.table-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.add-entry-btn {
+    background: #3b82f6;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.add-entry-btn:hover {
+    background: #2563eb;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.table-header {
+    text-align: left;
+    padding: 8px 8px;
+    border-bottom: 2px solid #e2e8f0;
+    font-weight: 600;
+}
+
+.dark .table-header {
+    border-bottom-color: #404040;
+}
+
+.table-cell {
+    padding: 8px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    word-break: break-word;
+}
+
+.dark .table-cell {
+    border-bottom-color: #404040;
+}
+
+.table-cell-actions {
+    padding: 8px 4px;
+    text-align: center;
+    width: 40px;
+}
+
+.delete-entry-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-entry-btn:hover {
+    background: #dc2626;
+}
+
+.table-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #9ca3af;
+}
+
+/* ==================== ADD FORM ==================== */
+.add-form {
+    margin-top: 8px;
+}
+
+.form-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.form-input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+}
+
+.dark .form-input {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: white;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+
+.form-save-btn {
+    background: #10b981;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.form-save-btn:hover {
+    background: #059669;
+}
+
+.form-cancel-btn {
+    background: #6b7280;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.form-cancel-btn:hover {
+    background: #4b5563;
+}
+
+/* ==================== THEME TOGGLE ==================== */
+.theme-toggle-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: #e5e7eb;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dark .theme-toggle-btn {
+    background: #404040;
+}
+
+.light-icon { display: inline; }
+.dark-icon { display: none; }
+.dark .light-icon { display: none; }
+.dark .dark-icon { display: inline; }
+
+/* ==================== BUTTONS ==================== */
+.clear-btn {
+    background: #dc2626;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    margin-top: 16px;
+}
+
+.clear-btn:hover {
+    background: #b91c1c;
+}
+
+/* ==================== TYPOGRAPHY ==================== */
+.main-title {
+    font-weight: bold;
+    font-size: 2.25rem;
+    text-align: center;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+/* ==================== SCROLLBAR ==================== */
+.palette-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.palette-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.palette-scroll::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+.palette-scroll::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.dark .palette-scroll::-webkit-scrollbar-track {
+    background: #404040;
+}
+
+.dark .palette-scroll::-webkit-scrollbar-thumb {
+    background: #666;
+}
+
+.dark .palette-scroll::-webkit-scrollbar-thumb:hover {
+    background: #888;
+}
