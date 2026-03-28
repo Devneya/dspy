@@ -8,29 +8,94 @@ const BLOCK_TYPES = new Set([
     const lastServerStart = localStorage.getItem('last_server_start');
      
     if (serverStart && lastServerStart !== serverStart) {
-        localStorage.removeItem('dspy_blocks_data');
-        localStorage.removeItem('dspy_blocks_order');
-        localStorage.removeItem('dspy_blocks_text');
-        localStorage.removeItem('dspy_block_labels');
-        localStorage.removeItem('dspy_block_texts');
-        localStorage.removeItem('dspy_table_values');
-        localStorage.removeItem('dspy_table_data');
+        const keysToClear = [
+            'dspy_blocks_data', 'dspy_blocks_order', 'dspy_blocks_text',
+            'dspy_block_labels', 'dspy_block_texts', 'dspy_table_values', 'dspy_table_data'
+        ];
+        keysToClear.forEach(key => localStorage.removeItem(key));
         localStorage.setItem('last_server_start', serverStart);
         console.log('Server restart detected - localStorage cleared');
     }
 })();
 
 const Storage = {
-    save(data) {
-        localStorage.setItem('dspy_blocks_data', JSON.stringify(data));
+    _get(key) {
+        const saved = localStorage.getItem(key);
+        return saved ? JSON.parse(saved) : null;
+    },
+    _set(key, data) {
+        localStorage.setItem(key, JSON.stringify(data));
+    },
+    _remove(key) {
+        localStorage.removeItem(key);
     },
     
-    load() {
-        const saved = localStorage.getItem('dspy_blocks_data');
-        return saved ? JSON.parse(saved) : { order: [], texts: {} };
+    saveBlocks(data) {
+        this._set('dspy_blocks_data', data);
     },
-    
-    saveFromDOM() {
+    loadBlocks() {
+        return this._get('dspy_blocks_data') || { order: [], texts: {} };
+    },
+    clearBlocks() {
+        const keysToClear = [
+            'dspy_blocks_data', 'dspy_blocks_order', 'dspy_blocks_text',
+            'dspy_block_labels', 'dspy_block_texts'
+        ];
+        keysToClear.forEach(key => this._remove(key));
+    },
+
+    saveTable(data) {
+        console.log('Saving table data:', data);
+        this._set('dspy_table_data', data);
+    },
+    loadTableData() {
+        return this._get('dspy_table_data') || { 
+            inputs: { 
+                columns: ["default"], 
+                rows: [] 
+            }, 
+            outputs: { 
+                columns: ["default"], 
+                rows: [] 
+            } 
+        };
+    },
+    saveTableValues(values) {
+        this._set('dspy_table_values', values);
+    },
+    loadTableValues() {
+        return this._get('dspy_table_values');
+    },
+    clearTable() {
+        this._remove('dspy_table_data');
+        this._remove('dspy_table_values');
+    }
+};
+
+const UI = {
+    restoreBlocks() {
+        const data = Storage.loadBlocks();
+        const blocks = document.querySelectorAll('.workspace-block');
+        blocks.forEach(block => {
+            const text = data.texts[block.id];
+            if (text) {
+                const textSpan = block.querySelector('.block-additional-text');
+                if (textSpan) textSpan.textContent = text;
+            }
+        });
+    },
+
+    updateBlockText(blockId, text) {
+        const data = Storage.loadBlocks();
+        if (text && text !== "placeholder for dspy module signature input") {
+            data.texts[blockId] = text;
+        } else {
+            delete data.texts[blockId];
+        }
+        Storage.saveBlocks(data);
+    },
+
+    saveBlocksState() {
         const blocks = document.querySelectorAll('.workspace-block');
         const order = Array.from(blocks).map(b => b.id);
         const texts = {};
@@ -41,54 +106,67 @@ const Storage = {
                 texts[block.id] = text;
             }
         });
-        this.save({ order, texts });
+        Storage.saveBlocks({ order, texts });
     },
     
-    updateText(blockId, text) {
-        const data = this.load();
-        if (text && text !== "placeholder for dspy module signature input") {
-            data.texts[blockId] = text;
-        } else {
-            delete data.texts[blockId];
+    saveTableState() {
+        const tableState = this.captureTableState();
+        if (tableState && (tableState.inputs.rows.length > 0 || tableState.outputs.rows.length > 0)) {
+            Storage.saveTable(tableState);
         }
-        this.save(data);
+        this.saveTableValues();
+        htmx.ajax('POST', '/table/restore', {
+            values: { data: JSON.stringify(tableState) },
+            swap: 'none'
+        }).catch(err => console.error('Error saving table state:', err));
     },
     
-    saveTableValues(values) {
-        localStorage.setItem('dspy_table_values', JSON.stringify(values));
-    },
-    
-    loadTableValues() {
-        const saved = localStorage.getItem('dspy_table_values');
-        return saved ? JSON.parse(saved) : null;
-    },
-    
-    saveTableData(data) {
-        localStorage.setItem('dspy_table_data', JSON.stringify(data));
-    },
-    
-    loadTableData() {
-        const saved = localStorage.getItem('dspy_table_data');
-        return saved ? JSON.parse(saved) : null;
-    },
-    
-    clearTableData() {
-        localStorage.removeItem('dspy_table_values');
-        localStorage.removeItem('dspy_table_data');
-    }
-};
-
-const UI = {
-    restore() {
-        const data = Storage.load();
-        const blocks = document.querySelectorAll('.workspace-block');
-        blocks.forEach(block => {
-            const text = data.texts[block.id];
-            if (text) {
-                const textSpan = block.querySelector('.block-additional-text');
-                if (textSpan) textSpan.textContent = text;
+    captureTableState() {
+        const inputs = document.querySelectorAll('.inline-input');
+        if (inputs.length === 0) return null;
+        
+        const tableState = {
+            inputs: { columns: [], rows: [] },
+            outputs: { columns: [], rows: [] }
+        };
+        
+        document.querySelectorAll('#inputs-table-body .table-header, #input-table-body .table-header').forEach(th => {
+            const colName = th.textContent.trim();
+            if (colName !== '#') tableState.inputs.columns.push(colName);
+        });
+        
+        document.querySelectorAll('#outputs-table-body .table-header, #output-table-body .table-header').forEach(th => {
+            const colName = th.textContent.trim();
+            if (colName !== '#') tableState.outputs.columns.push(colName);
+        });
+        
+        const inputRows = new Map();
+        const outputRows = new Map();
+        
+        inputs.forEach(input => {
+            const name = input.name;
+            const value = input.value;
+            
+            const match = name.match(/^(inputs|outputs)_(\d+)_(.+)$/);
+            if (match) {
+                const [, type, rowId, colName] = match;
+                const rowIdNum = parseInt(rowId);
+                
+                if (type === 'inputs') {
+                    if (!inputRows.has(rowIdNum)) inputRows.set(rowIdNum, { id: rowIdNum });
+                    inputRows.get(rowIdNum)[colName] = value;
+                } else if (type === 'outputs') {
+                    if (!outputRows.has(rowIdNum)) outputRows.set(rowIdNum, { id: rowIdNum });
+                    outputRows.get(rowIdNum)[colName] = value;
+                }
             }
         });
+        
+        tableState.inputs.rows = Array.from(inputRows.values());
+        tableState.outputs.rows = Array.from(outputRows.values());
+        
+        console.log('Captured table state:', tableState);
+        return tableState;
     },
     
     saveTableValues() {
@@ -103,6 +181,7 @@ const UI = {
         const values = Storage.loadTableValues();
         if (!values) return;
         
+        console.log('Restoring table values:', values);
         document.querySelectorAll('.inline-input').forEach(input => {
             if (values[input.name] !== undefined) {
                 input.value = values[input.name];
@@ -110,105 +189,12 @@ const UI = {
         });
     },
     
-    saveTableState() {
-        const inputs = document.querySelectorAll('.inline-input');
-        if (inputs.length === 0) return;
-        
-        const tableState = {
-            inputs: {
-                columns: [],
-                rows: []
-            },
-            outputs: {
-                columns: [],
-                rows: []
-            }
-        };
-        
-        const inputColumns = [];
-        document.querySelectorAll('#input-table-body .table-header').forEach(th => {
-            const colName = th.textContent.trim();
-            if (colName !== '#') inputColumns.push(colName);
+    clearTable() {
+        Storage.clearTable();
+        htmx.ajax('POST', '/table/clear', {
+            target: '#table-section',
+            swap: 'outerHTML'
         });
-        
-        const outputColumns = [];
-        document.querySelectorAll('#output-table-body .table-header').forEach(th => {
-            const colName = th.textContent.trim();
-            if (colName !== '#') outputColumns.push(colName);
-        });
-        
-        tableState.inputs.columns = inputColumns;
-        tableState.outputs.columns = outputColumns;
-        
-        const inputRows = new Map();
-        const outputRows = new Map();
-        
-        inputs.forEach(input => {
-            const name = input.name;
-            const value = input.value;
-            
-            if (name.startsWith('input_')) {
-                const match = name.match(/input_(\d+)_(.+)/);
-                if (match) {
-                    const rowId = parseInt(match[1]);
-                    const colName = match[2];
-                    if (!inputRows.has(rowId)) {
-                        inputRows.set(rowId, { id: rowId });
-                    }
-                    inputRows.get(rowId)[colName] = value;
-                }
-            } else if (name.startsWith('output_')) {
-                const match = name.match(/output_(\d+)_(.+)/);
-                if (match) {
-                    const rowId = parseInt(match[1]);
-                    const colName = match[2];
-                    if (!outputRows.has(rowId)) {
-                        outputRows.set(rowId, { id: rowId });
-                    }
-                    outputRows.get(rowId)[colName] = value;
-                }
-            }
-        });
-        
-        tableState.inputs.rows = Array.from(inputRows.values());
-        tableState.outputs.rows = Array.from(outputRows.values());
-        
-        Storage.saveTableData(tableState);
-        
-        fetch('/table/restore', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(tableState)
-        }).catch(err => console.error('Error saving table state:', err));
-    },
-    
-    restoreTableState() {
-        const tableState = Storage.loadTableData();
-        if (!tableState) return;
-        
-        fetch('/table/restore', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(tableState)
-        }).then(() => {
-            htmx.ajax('GET', '/table-section', {
-                target: '#table-section',
-                swap: 'outerHTML'
-            });
-        }).catch(err => console.error('Error restoring table state:', err));
-    },
-    
-    clearTableState() {
-        Storage.clearTableData();
-        fetch('/table/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        }).then(() => {
-            htmx.ajax('GET', '/table-section', {
-                target: '#table-section',
-                swap: 'outerHTML'
-            });
-        }).catch(err => console.error('Error clearing table state:', err));
     }
 };
 
@@ -289,12 +275,13 @@ function showContextMenu(event, blockId) {
         const newText = textarea.value.trim();
         const textSpan = block.querySelector('.block-additional-text');
         if (textSpan) textSpan.textContent = newText;
-        Storage.updateText(blockId, newText);
-        fetch(`/update-text/${blockId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `text=${encodeURIComponent(newText)}`
+        UI.updateBlockText(blockId, newText);
+    
+        htmx.ajax('POST', `/update-text/${blockId}`, {
+            values: { text: newText },
+            swap: 'none'
         });
+    
         closeMenu();
     });
     
@@ -366,7 +353,7 @@ function initSortable() {
         handle: '.workspace-block',
         onEnd: () => {
             const order = Array.from(area.children).map(c => c.id);
-            Storage.saveFromDOM();
+            UI.saveBlocksState();
             htmx.ajax('POST', '/reorder', {
                 target: '#ws',
                 values: {order: JSON.stringify(order)},
@@ -376,19 +363,10 @@ function initSortable() {
     });
 }
 
-// ==================== TABLE ====================
-let saveTimeout;
-function debouncedSaveTableState() {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-        UI.saveTableState();
-    }, 500);
-}
-
 document.body.addEventListener('input', (e) => {
     if (e.target.classList && e.target.classList.contains('inline-input')) {
         UI.saveTableValues();
-        debouncedSaveTableState();
+        UI.saveTableState();
     }
 });
 
@@ -396,64 +374,51 @@ document.body.addEventListener('htmx:afterSwap', (evt) => {
     if (evt.detail.target?.id === 'table-section') {
         setTimeout(() => {
             UI.restoreTableValues();
-            if (!window._tableRestored) {
-                const tableState = Storage.loadTableData();
-                if (tableState && (tableState.inputs.rows.length > 0 || tableState.outputs.rows.length > 0)) {
-                    UI.restoreTableState();
-                }
-                window._tableRestored = true;
-            }
-        }, 100);
+        }, 50);
     }
-    
     if (evt.detail.target?.id === 'ws') {
         setTimeout(() => {
-            UI.restore();
+            UI.restoreBlocks();
             initSortable();
-        }, 10);
+        }, 50);
     }
-    
-    if (evt.detail.target?.querySelectorAll) {
-        const inputs = evt.detail.target.querySelectorAll('.inline-input');
-        inputs.forEach(input => {
-            if (!input._hasListener) {
-                input._hasListener = true;
-                input.addEventListener('input', () => {
-                    UI.saveTableValues();
-                    debouncedSaveTableState();
-                });
-            }
-        });
-    }
-});
-
-window.addEventListener('beforeunload', () => {
-    UI.saveTableValues();
-    UI.saveTableState();
 });
 
 function initialize() {
     initSortable();
     
-    const data = Storage.load();
-    if (data.order && data.order.length > 0 && !window.initialLoadDone) {
-        window.initialLoadDone = true;
+    const blocksData = Storage.loadBlocks();
+    if (blocksData.order && blocksData.order.length > 0 && !window.initialBlockLoadDone) {
+        window.initialBlockLoadDone = true;
         htmx.ajax('POST', '/reorder', {
             target: '#ws',
-            values: {order: JSON.stringify(data.order)},
+            values: {order: JSON.stringify(blocksData.order)},
             swap: 'outerHTML'
+        }).then(() => {
+            setTimeout(() => UI.restoreBlocks(), 100);
         });
     } else {
-        UI.restore();
+        UI.restoreBlocks();
     }
     
-    setTimeout(() => {
+    const tableData = Storage.loadTableData();
+    if (tableData && (tableData.inputs.rows.length > 0 || tableData.outputs.rows.length > 0) && !window.initialTableLoadDone) {
+        window.initialTableLoadDone = true;
+        htmx.ajax('POST', '/table/restore', {
+            target: '#table-section',
+            swap: 'outerHTML',
+            values: { data: JSON.stringify(tableData) }
+        }).then(() => {
+            setTimeout(() => UI.restoreTableValues(), 100);
+        });
+    } else {
         UI.restoreTableValues();
-        const tableState = Storage.loadTableData();
-        if (tableState && (tableState.inputs.rows.length > 0 || tableState.outputs.rows.length > 0)) {
-            UI.restoreTableState();
-        }
-    }, 200);
+    }
 }
+
+window.addEventListener('beforeunload', () => {
+    UI.saveTableState();
+    UI.saveBlocksState();
+});
 
 initialize();
