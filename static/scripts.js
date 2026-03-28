@@ -13,6 +13,7 @@ const BLOCK_TYPES = new Set([
         localStorage.removeItem('dspy_blocks_text');
         localStorage.removeItem('dspy_block_labels');
         localStorage.removeItem('dspy_block_texts');
+        localStorage.removeItem('dspy_table_values');
         localStorage.setItem('last_server_start', serverStart);
         console.log('Server restart detected - localStorage cleared');
     }
@@ -50,6 +51,15 @@ const Storage = {
             delete data.texts[blockId];
         }
         this.save(data);
+    },
+    
+    saveTableValues(values) {
+        localStorage.setItem('dspy_table_values', JSON.stringify(values));
+    },
+    
+    loadTableValues() {
+        const saved = localStorage.getItem('dspy_table_values');
+        return saved ? JSON.parse(saved) : null;
     }
 };
 
@@ -64,10 +74,29 @@ const UI = {
                 if (textSpan) textSpan.textContent = text;
             }
         });
+    },
+    
+    saveTableValues() {
+        const values = {};
+        document.querySelectorAll('.inline-input').forEach(input => {
+            values[input.name] = input.value;
+        });
+        Storage.saveTableValues(values);
+    },
+    
+    restoreTableValues() {
+        const values = Storage.loadTableValues();
+        if (!values) return;
+        
+        document.querySelectorAll('.inline-input').forEach(input => {
+            if (values[input.name] !== undefined) {
+                input.value = values[input.name];
+            }
+        });
     }
 };
 
-// ==================== THEME PERSISTENCE ====================
+// ==================== THEME ====================
 function initTheme() {
     const savedTheme = localStorage.getItem('dspy_theme');
     if (savedTheme === 'dark') {
@@ -142,7 +171,8 @@ function showContextMenu(event, blockId) {
     saveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const newText = textarea.value.trim();
-        UI.updateBlockText(blockId, newText);
+        const textSpan = block.querySelector('.block-additional-text');
+        if (textSpan) textSpan.textContent = newText;
         Storage.updateText(blockId, newText);
         fetch(`/update-text/${blockId}`, {
             method: 'POST',
@@ -179,14 +209,6 @@ function showContextMenu(event, blockId) {
         document.addEventListener('contextmenu', onClickOutside);
     }, 0);
 }
-
-UI.updateBlockText = function(blockId, text) {
-    const block = document.getElementById(blockId);
-    const textSpan = block?.querySelector('.block-additional-text');
-    if (textSpan) {
-        textSpan.textContent = text;
-    }
-};
 
 window.showContextMenu = showContextMenu;
 
@@ -238,6 +260,34 @@ function initSortable() {
     });
 }
 
+// ==================== TABLE ====================
+
+// Save on input
+document.body.addEventListener('input', (e) => {
+    if (e.target.classList && e.target.classList.contains('inline-input')) {
+        UI.saveTableValues();
+    }
+});
+
+document.body.addEventListener('htmx:afterSwap', (evt) => {
+    if (evt.detail.target?.id === 'table-section') {
+        setTimeout(() => {
+            UI.restoreTableValues();
+        }, 100);
+    }
+    
+    if (evt.detail.target?.id === 'ws') {
+        setTimeout(() => {
+            UI.restore();
+            initSortable();
+        }, 10);
+    }
+});
+
+window.addEventListener('beforeunload', () => {
+    UI.saveTableValues();
+});
+
 function initialize() {
     initSortable();
     
@@ -252,15 +302,10 @@ function initialize() {
     } else {
         UI.restore();
     }
+    
+    setTimeout(() => {
+        UI.restoreTableValues();
+    }, 200);
 }
-
-document.body.addEventListener('htmx:afterSwap', (evt) => {
-    if (evt.detail.target?.id === 'ws') {
-        setTimeout(() => {
-            UI.restore();
-            initSortable();
-        }, 10);
-    }
-});
 
 initialize();
