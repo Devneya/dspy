@@ -6,7 +6,7 @@ const BLOCK_TYPES = new Set([
 (function() {
     const serverStart = document.querySelector('meta[name="server-start"]')?.content;
     const lastServerStart = localStorage.getItem('last_server_start');
-    
+     
     if (serverStart && lastServerStart !== serverStart) {
         localStorage.removeItem('dspy_blocks_data');
         localStorage.removeItem('dspy_blocks_order');
@@ -14,6 +14,7 @@ const BLOCK_TYPES = new Set([
         localStorage.removeItem('dspy_block_labels');
         localStorage.removeItem('dspy_block_texts');
         localStorage.removeItem('dspy_table_values');
+        localStorage.removeItem('dspy_table_data');
         localStorage.setItem('last_server_start', serverStart);
         console.log('Server restart detected - localStorage cleared');
     }
@@ -60,6 +61,20 @@ const Storage = {
     loadTableValues() {
         const saved = localStorage.getItem('dspy_table_values');
         return saved ? JSON.parse(saved) : null;
+    },
+    
+    saveTableData(data) {
+        localStorage.setItem('dspy_table_data', JSON.stringify(data));
+    },
+    
+    loadTableData() {
+        const saved = localStorage.getItem('dspy_table_data');
+        return saved ? JSON.parse(saved) : null;
+    },
+    
+    clearTableData() {
+        localStorage.removeItem('dspy_table_values');
+        localStorage.removeItem('dspy_table_data');
     }
 };
 
@@ -93,6 +108,107 @@ const UI = {
                 input.value = values[input.name];
             }
         });
+    },
+    
+    saveTableState() {
+        const inputs = document.querySelectorAll('.inline-input');
+        if (inputs.length === 0) return;
+        
+        const tableState = {
+            inputs: {
+                columns: [],
+                rows: []
+            },
+            outputs: {
+                columns: [],
+                rows: []
+            }
+        };
+        
+        const inputColumns = [];
+        document.querySelectorAll('#input-table-body .table-header').forEach(th => {
+            const colName = th.textContent.trim();
+            if (colName !== '#') inputColumns.push(colName);
+        });
+        
+        const outputColumns = [];
+        document.querySelectorAll('#output-table-body .table-header').forEach(th => {
+            const colName = th.textContent.trim();
+            if (colName !== '#') outputColumns.push(colName);
+        });
+        
+        tableState.inputs.columns = inputColumns;
+        tableState.outputs.columns = outputColumns;
+        
+        const inputRows = new Map();
+        const outputRows = new Map();
+        
+        inputs.forEach(input => {
+            const name = input.name;
+            const value = input.value;
+            
+            if (name.startsWith('input_')) {
+                const match = name.match(/input_(\d+)_(.+)/);
+                if (match) {
+                    const rowId = parseInt(match[1]);
+                    const colName = match[2];
+                    if (!inputRows.has(rowId)) {
+                        inputRows.set(rowId, { id: rowId });
+                    }
+                    inputRows.get(rowId)[colName] = value;
+                }
+            } else if (name.startsWith('output_')) {
+                const match = name.match(/output_(\d+)_(.+)/);
+                if (match) {
+                    const rowId = parseInt(match[1]);
+                    const colName = match[2];
+                    if (!outputRows.has(rowId)) {
+                        outputRows.set(rowId, { id: rowId });
+                    }
+                    outputRows.get(rowId)[colName] = value;
+                }
+            }
+        });
+        
+        tableState.inputs.rows = Array.from(inputRows.values());
+        tableState.outputs.rows = Array.from(outputRows.values());
+        
+        Storage.saveTableData(tableState);
+        
+        fetch('/table/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tableState)
+        }).catch(err => console.error('Error saving table state:', err));
+    },
+    
+    restoreTableState() {
+        const tableState = Storage.loadTableData();
+        if (!tableState) return;
+        
+        fetch('/table/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tableState)
+        }).then(() => {
+            htmx.ajax('GET', '/table-section', {
+                target: '#table-section',
+                swap: 'outerHTML'
+            });
+        }).catch(err => console.error('Error restoring table state:', err));
+    },
+    
+    clearTableState() {
+        Storage.clearTableData();
+        fetch('/table/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(() => {
+            htmx.ajax('GET', '/table-section', {
+                target: '#table-section',
+                swap: 'outerHTML'
+            });
+        }).catch(err => console.error('Error clearing table state:', err));
     }
 };
 
@@ -261,11 +377,18 @@ function initSortable() {
 }
 
 // ==================== TABLE ====================
+let saveTimeout;
+function debouncedSaveTableState() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        UI.saveTableState();
+    }, 500);
+}
 
-// Save on input
 document.body.addEventListener('input', (e) => {
     if (e.target.classList && e.target.classList.contains('inline-input')) {
         UI.saveTableValues();
+        debouncedSaveTableState();
     }
 });
 
@@ -273,6 +396,13 @@ document.body.addEventListener('htmx:afterSwap', (evt) => {
     if (evt.detail.target?.id === 'table-section') {
         setTimeout(() => {
             UI.restoreTableValues();
+            if (!window._tableRestored) {
+                const tableState = Storage.loadTableData();
+                if (tableState && (tableState.inputs.rows.length > 0 || tableState.outputs.rows.length > 0)) {
+                    UI.restoreTableState();
+                }
+                window._tableRestored = true;
+            }
         }, 100);
     }
     
@@ -282,10 +412,24 @@ document.body.addEventListener('htmx:afterSwap', (evt) => {
             initSortable();
         }, 10);
     }
+    
+    if (evt.detail.target?.querySelectorAll) {
+        const inputs = evt.detail.target.querySelectorAll('.inline-input');
+        inputs.forEach(input => {
+            if (!input._hasListener) {
+                input._hasListener = true;
+                input.addEventListener('input', () => {
+                    UI.saveTableValues();
+                    debouncedSaveTableState();
+                });
+            }
+        });
+    }
 });
 
 window.addEventListener('beforeunload', () => {
     UI.saveTableValues();
+    UI.saveTableState();
 });
 
 function initialize() {
@@ -305,6 +449,10 @@ function initialize() {
     
     setTimeout(() => {
         UI.restoreTableValues();
+        const tableState = Storage.loadTableData();
+        if (tableState && (tableState.inputs.rows.length > 0 || tableState.outputs.rows.length > 0)) {
+            UI.restoreTableState();
+        }
     }, 200);
 }
 

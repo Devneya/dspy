@@ -403,6 +403,47 @@ def delete_block(bid: str):
 
 # ==================== TABLE ROUTES ====================
 
+@rt("/table-section")
+def get_table_section():
+    return render_table_section()
+
+@rt("/table/restore", methods=["POST"])
+async def restore_table_data(request):
+    global table_entries, entry_id
+    try:
+        data = await request.json()
+        
+        # If data is empty, don't restore (keep current state)
+        if not data or (not data.get("inputs") and not data.get("outputs")):
+            return "OK"
+        
+        if "inputs" in data:
+            if "columns" in data["inputs"] and data["inputs"]["columns"]:
+                table_entries["inputs"]["columns"] = data["inputs"]["columns"]
+            if "rows" in data["inputs"]:
+                table_entries["inputs"]["rows"] = data["inputs"]["rows"]
+        
+        if "outputs" in data:
+            if "columns" in data["outputs"] and data["outputs"]["columns"]:
+                table_entries["outputs"]["columns"] = data["outputs"]["columns"]
+            if "rows" in data["outputs"]:
+                table_entries["outputs"]["rows"] = data["outputs"]["rows"]
+        
+        # Update entry_id
+        max_id = 0
+        for row in table_entries["inputs"]["rows"]:
+            if row.get("id", 0) > max_id:
+                max_id = row["id"]
+        for row in table_entries["outputs"]["rows"]:
+            if row.get("id", 0) > max_id:
+                max_id = row["id"]
+        entry_id = max_id + 1 if max_id > 0 else 1
+        
+        return "OK"
+    except Exception as e:
+        print(f"Error restoring table: {e}")
+        return "Error", 500
+
 @rt("/table/add-column/{subtable}")
 def add_column(subtable: str):
     global table_entries
