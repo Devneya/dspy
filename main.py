@@ -5,14 +5,13 @@ import time
 import os
 
 SCHEMA_PATH = os.path.join("static", "dspy_schemas.json")
-with open(SCHEMA_PATH, 'r') as f:
+with open(SCHEMA_PATH, "r") as f:
     DSPY_MODULE_SCHEMAS = json.load(f)
 
 BLOCK_TYPES = list(DSPY_MODULE_SCHEMAS.keys())
 
 MODULE_NAMES = {
-    block_type: schema["name"] 
-    for block_type, schema in DSPY_MODULE_SCHEMAS.items()
+    block_type: schema["name"] for block_type, schema in DSPY_MODULE_SCHEMAS.items()
 }
 
 app, rt = fast_app(
@@ -21,10 +20,14 @@ app, rt = fast_app(
         Theme.blue.headers(),
         Meta(name="live-reload", content="disabled"),
         Link(rel="stylesheet", href="/static/styles.css"),
-        Script(src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js", defer=True),
+        Script(
+            src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js",
+            defer=True,
+        ),
         Script(src="/static/scripts.js", defer=True),
-    )
+    ),
 )
+
 
 class BlockData:
     def __init__(self, block_type, position):
@@ -36,33 +39,38 @@ class BlockData:
         self.config = {}
         block_id += 1
 
+
 class TableData:
     def __init__(self):
         self.entries = {
             "inputs": {"columns": ["default"], "rows": []},
-            "outputs": {"columns": ["default"], "rows": []}
+            "outputs": {"columns": ["default"], "rows": []},
         }
         self.next_id = 1
-    
+
     def add_row(self):
         row = {"id": self.next_id}
         for col in self.entries["inputs"]["columns"]:
             row[col] = ""
         self.entries["inputs"]["rows"].append(row)
-        
+
         row = {"id": self.next_id}
         for col in self.entries["outputs"]["columns"]:
             row[col] = ""
         self.entries["outputs"]["rows"].append(row)
-        
+
         self.next_id += 1
         return self.entries
-    
+
     def delete_row(self, row_id):
-        self.entries["inputs"]["rows"] = [r for r in self.entries["inputs"]["rows"] if r["id"] != row_id]
-        self.entries["outputs"]["rows"] = [r for r in self.entries["outputs"]["rows"] if r["id"] != row_id]
+        self.entries["inputs"]["rows"] = [
+            r for r in self.entries["inputs"]["rows"] if r["id"] != row_id
+        ]
+        self.entries["outputs"]["rows"] = [
+            r for r in self.entries["outputs"]["rows"] if r["id"] != row_id
+        ]
         return self.entries
-    
+
     def add_column(self, subtable):
         columns = self.entries[subtable]["columns"]
         new_col_num = len([c for c in columns if c.startswith("col_")]) + 1
@@ -71,7 +79,7 @@ class TableData:
         for row in self.entries[subtable]["rows"]:
             row[new_col_name] = ""
         return self.entries
-    
+
     def delete_column(self, subtable, col_name):
         if col_name in self.entries[subtable]["columns"]:
             if len(self.entries[subtable]["columns"]) > 1:
@@ -80,7 +88,7 @@ class TableData:
                     if col_name in row:
                         del row[col_name]
         return self.entries
-    
+
     def rename_column(self, subtable, old_name, new_name):
         if new_name and new_name not in self.entries[subtable]["columns"]:
             idx = self.entries[subtable]["columns"].index(old_name)
@@ -89,28 +97,28 @@ class TableData:
                 if old_name in row:
                     row[new_name] = row.pop(old_name)
         return self.entries
-    
+
     def clear(self):
         self.entries = {
             "inputs": {"columns": ["default"], "rows": []},
-            "outputs": {"columns": ["default"], "rows": []}
+            "outputs": {"columns": ["default"], "rows": []},
         }
         self.next_id = 1
         return self.entries
-    
+
     def restore(self, data):
         if "inputs" in data:
             if "columns" in data["inputs"] and data["inputs"]["columns"]:
                 self.entries["inputs"]["columns"] = data["inputs"]["columns"]
             if "rows" in data["inputs"]:
                 self.entries["inputs"]["rows"] = data["inputs"]["rows"]
-        
+
         if "outputs" in data:
             if "columns" in data["outputs"] and data["outputs"]["columns"]:
                 self.entries["outputs"]["columns"] = data["outputs"]["columns"]
             if "rows" in data["outputs"]:
                 self.entries["outputs"]["rows"] = data["outputs"]["rows"]
-        
+
         max_id = 0
         for row in self.entries["inputs"]["rows"]:
             max_id = max(max_id, row.get("id", 0))
@@ -119,41 +127,48 @@ class TableData:
         self.next_id = max_id + 1 if max_id > 0 else 1
         return self.entries
 
+
 blocks = []
 block_id = 1
 table = TableData()
 
 # ==================== RENDER FUNCTIONS ====================
 
+
 def render_palette():
     return Div(
         H3("DSPy Modules", cls="palette-title"),
-        *[Div(
-            Card(
-                Span(MODULE_NAMES.get(block_type, block_type), cls="block-label"),
-                cls="block-card"
-            ),
-            draggable="true",
-            **{"data-block-type": block_type},
-            cls="draggable-item"
-        ) for block_type in BLOCK_TYPES],
+        *[
+            Div(
+                Card(
+                    Span(MODULE_NAMES.get(block_type, block_type), cls="block-label"),
+                    cls="block-card",
+                ),
+                draggable="true",
+                **{"data-block-type": block_type},
+                cls="draggable-item",
+            )
+            for block_type in BLOCK_TYPES
+        ],
         cls="palette-scroll",
-        id="palette"
+        id="palette",
     )
+
 
 def render_workspace():
     if not blocks:
         return Div(
             DivCentered(P("Drop modules here", cls="empty-message")),
-            id="working-area", 
-            cls="empty-workspace"
+            id="working-area",
+            cls="empty-workspace",
         )
-    
+
     return Div(
         *[render_block(b) for b in sorted(blocks, key=lambda x: x.position)],
         id="working-area",
-        cls="workspace"
+        cls="workspace",
     )
+
 
 def render_block(block):
     signature = block.config.get("signature", "") if block.config else ""
@@ -168,38 +183,39 @@ def render_block(block):
                 UkIcon("x", height=16),
                 hx_post=f"/rm/{block.id}",
                 hx_target="#ws",
-                hx_swap="outerHTML"
+                hx_swap="outerHTML",
             ),
-            cls="block-header"
+            cls="block-header",
         ),
-        Div(
-            Span(display_text, cls="block-signature"),
-            cls="block-text-display"
-        ),
+        Div(Span(display_text, cls="block-signature"), cls="block-text-display"),
         id=block.id,
         draggable="false",
         cls="workspace-block",
         **{
             "data-type": block.type,
             "data-config": json.dumps(block.config),
-            "oncontextmenu": f"showContextMenu(event, '{block.id}'); return false;"
-        }
+            "oncontextmenu": f"showContextMenu(event, '{block.id}'); return false;",
+        },
     )
+
 
 def render_ws():
     return Div(
         Div(H3("Workspace", cls="workspace-title")),
         render_workspace(),
         Div(
-            Button("Clear All",
-                   hx_post="/clear",
-                   hx_target="#ws",
-                   hx_swap="outerHTML",
-                   cls="clear-btn"),
+            Button(
+                "Clear All",
+                hx_post="/clear",
+                hx_target="#ws",
+                hx_swap="outerHTML",
+                cls="clear-btn",
+            ),
         ),
         id="ws",
-        cls="workspace-container"
+        cls="workspace-container",
     )
+
 
 def render_table_section():
     return Div(
@@ -210,55 +226,81 @@ def render_table_section():
                     Div(
                         H4("Inputs", cls="subtable-title"),
                         render_columns_section("inputs"),
-                        cls="subtable-header"
+                        cls="subtable-header",
                     ),
                     render_data_table("inputs"),
-                    cls="subtable"
+                    cls="subtable",
                 ),
                 Div(
                     Div(
                         H4("Outputs", cls="subtable-title"),
                         render_columns_section("outputs"),
-                        cls="subtable-header"
+                        cls="subtable-header",
                     ),
                     render_data_table("outputs"),
-                    cls="subtable"
+                    cls="subtable",
                 ),
-                cls="subtables-side-by-side"
+                cls="subtables-side-by-side",
             ),
             Div(
-                Button(UkIcon("plus", height=18), cls="add-row-btn",
-                       hx_post="/table/add-row", hx_target="#table-section", hx_swap="outerHTML"),
-                cls="add-row-button-container"
+                Button(
+                    UkIcon("plus", height=18),
+                    cls="add-row-btn",
+                    hx_post="/table/add-row",
+                    hx_target="#table-section",
+                    hx_swap="outerHTML",
+                ),
+                cls="add-row-button-container",
             ),
-            cls="table-content"
+            cls="table-content",
         ),
-        id="table-section", cls="table-container"
+        id="table-section",
+        cls="table-container",
     )
+
 
 def render_columns_section(subtable):
     columns = table.entries[subtable]["columns"]
     return Div(
         Div(
             *[render_column_tag(subtable, col) for col in columns],
-            Button(UkIcon("plus", height=12), cls="add-column-btn",
-                   hx_post=f"/table/add-column/{subtable}", hx_target="#table-section", hx_swap="outerHTML"),
-            cls="columns-list"
+            Button(
+                UkIcon("plus", height=12),
+                cls="add-column-btn",
+                hx_post=f"/table/add-column/{subtable}",
+                hx_target="#table-section",
+                hx_swap="outerHTML",
+            ),
+            cls="columns-list",
         ),
-        cls="columns-manager"
+        cls="columns-manager",
     )
+
 
 def render_column_tag(subtable, col_name):
     return Span(
         Span(col_name, cls="column-name-text"),
-        Button(UkIcon("edit-2", height=10), cls="rename-column-btn", title="Rename",
-               hx_get=f"/table/rename-column-form/{subtable}/{col_name}",
-               hx_target=f"#column-{subtable}-{col_name.replace(' ', '-')}", hx_swap="outerHTML"),
-        Button(UkIcon("x", height=10), cls="delete-column-btn", title="Delete",
-               hx_post=f"/table/delete-column/{subtable}/{col_name}", hx_target="#table-section",
-               hx_swap="outerHTML", hx_confirm="Delete this column?"),
-        id=f"column-{subtable}-{col_name.replace(' ', '-')}", cls="column-tag"
+        Button(
+            UkIcon("edit-2", height=10),
+            cls="rename-column-btn",
+            title="Rename",
+            hx_get=f"/table/rename-column-form/{subtable}/{col_name}",
+            hx_target=f"#column-{subtable}-{col_name.replace(' ', '-')}",
+            hx_swap="outerHTML",
+        ),
+        Button(
+            UkIcon("x", height=10),
+            cls="delete-column-btn",
+            title="Delete",
+            hx_post=f"/table/delete-column/{subtable}/{col_name}",
+            hx_target="#table-section",
+            hx_swap="outerHTML",
+            hx_confirm="Delete this column?",
+        ),
+        id=f"column-{subtable}-{col_name.replace(' ', '-')}",
+        cls="column-tag",
     )
+
 
 def render_data_table(subtable):
     if not table.entries[subtable]["rows"]:
@@ -269,46 +311,73 @@ def render_data_table(subtable):
     table_rows = []
     for row in rows:
         cells = [
-            Td(row['id'], cls="table-cell-id"),
-            *[Td(
-                Input(type="text", name=f"{subtable}_{row['id']}_{col}",
-                      value=row.get(col, ""), cls="inline-input"),
-                cls="table-cell"
-            ) for col in columns],
+            Td(row["id"], cls="table-cell-id"),
+            *[
+                Td(
+                    Input(
+                        type="text",
+                        name=f"{subtable}_{row['id']}_{col}",
+                        value=row.get(col, ""),
+                        cls="inline-input",
+                    ),
+                    cls="table-cell",
+                )
+                for col in columns
+            ],
             Td(
-                Button(UkIcon("trash-2", height=14), cls="delete-entry-btn",
-                       hx_post=f"/table/delete-row/{row['id']}", hx_target="#table-section",
-                       hx_swap="outerHTML", hx_confirm="Delete this row?"),
-                cls="table-cell-actions"
-            )
+                Button(
+                    UkIcon("trash-2", height=14),
+                    cls="delete-entry-btn",
+                    hx_post=f"/table/delete-row/{row['id']}",
+                    hx_target="#table-section",
+                    hx_swap="outerHTML",
+                    hx_confirm="Delete this row?",
+                ),
+                cls="table-cell-actions",
+            ),
         ]
         table_rows.append(Tr(*cells))
     return Div(
         Table(
             Thead(Tr(*[Th(header) for header in headers])),
             Tbody(*table_rows),
-            cls="data-table"
+            cls="data-table",
         ),
-        id=f"{subtable}-table-body"
+        id=f"{subtable}-table-body",
     )
+
 
 def render_rename_column_form(subtable, col_name):
     return Span(
         Form(
-            Input(type="text", name="new_name", value=col_name, required=True, 
-                  cls="rename-input", autofocus=True),
+            Input(
+                type="text",
+                name="new_name",
+                value=col_name,
+                required=True,
+                cls="rename-input",
+                autofocus=True,
+            ),
             Button(UkIcon("check", height=10), type="submit", cls="rename-save-btn"),
-            Button(UkIcon("x", height=10), type="button", cls="rename-cancel-btn",
-                   hx_get=f"/table/cancel-rename/{subtable}/{col_name}",
-                   hx_target=f"#column-{subtable}-{col_name.replace(' ', '-')}", hx_swap="outerHTML"),
+            Button(
+                UkIcon("x", height=10),
+                type="button",
+                cls="rename-cancel-btn",
+                hx_get=f"/table/cancel-rename/{subtable}/{col_name}",
+                hx_target=f"#column-{subtable}-{col_name.replace(' ', '-')}",
+                hx_swap="outerHTML",
+            ),
             hx_post=f"/table/rename-column/{subtable}/{col_name}",
-            hx_target="#table-section", hx_swap="outerHTML",
-            cls="rename-form"
+            hx_target="#table-section",
+            hx_swap="outerHTML",
+            cls="rename-form",
         ),
-        cls="column-tag editing"
+        cls="column-tag editing",
     )
 
+
 # ==================== ROUTES ====================
+
 
 @rt("/")
 def get():
@@ -323,18 +392,16 @@ def get():
         ),
         H1("DSPy Module Builder", cls="main-title"),
         Div(
-            Div(
-                render_palette(),
-                render_ws(),
-                cls="palette-workspace-row"
-            ),
+            Div(render_palette(), render_ws(), cls="palette-workspace-row"),
             render_table_section(),
-            cls="main-vertical-layout"
+            cls="main-vertical-layout",
         ),
-        cls="container"
+        cls="container",
     )
 
+
 # ==================== BLOCK ROUTES ====================
+
 
 @rt("/add/{btype}")
 def add_block(btype: str):
@@ -342,6 +409,7 @@ def add_block(btype: str):
         return render_ws()
     blocks.append(BlockData(btype, len(blocks)))
     return render_ws()
+
 
 @rt("/update-config/{bid}")
 def update_config(bid: str, config: str):
@@ -354,6 +422,7 @@ def update_config(bid: str, config: str):
     except Exception as e:
         print(f"Error updating config: {e}")
     return render_ws()
+
 
 @rt("/reorder")
 def reorder(order: str):
@@ -370,11 +439,13 @@ def reorder(order: str):
         pass
     return render_ws()
 
+
 @rt("/clear")
 def clear():
     global blocks
     blocks.clear()
     return render_ws()
+
 
 @rt("/rm/{bid}")
 def delete_block(bid: str):
@@ -384,7 +455,9 @@ def delete_block(bid: str):
         b.position = i
     return render_ws()
 
+
 # ==================== TABLE ROUTES ====================
+
 
 @rt("/table/add-column/{subtable}")
 def add_column(subtable: str):
@@ -392,19 +465,23 @@ def add_column(subtable: str):
     table.add_column(subtable)
     return render_table_section()
 
+
 @rt("/table/delete-column/{subtable}/{col_name}")
 def delete_column(subtable: str, col_name: str):
     global table
     table.delete_column(subtable, col_name)
     return render_table_section()
 
+
 @rt("/table/rename-column-form/{subtable}/{col_name}")
 def rename_column_form(subtable: str, col_name: str):
     return render_rename_column_form(subtable, col_name)
 
+
 @rt("/table/cancel-rename/{subtable}/{col_name}")
 def cancel_rename(subtable: str, col_name: str):
     return render_column_tag(subtable, col_name)
+
 
 @rt("/table/rename-column/{subtable}/{col_name}")
 def rename_column(subtable: str, col_name: str, new_name: str):
@@ -412,17 +489,20 @@ def rename_column(subtable: str, col_name: str, new_name: str):
     table.rename_column(subtable, col_name, new_name)
     return render_table_section()
 
+
 @rt("/table/add-row")
 def add_table_row():
     global table
     table.add_row()
     return render_table_section()
 
+
 @rt("/table/delete-row/{row_id}")
 def delete_table_row(row_id: int):
     global table
     table.delete_row(row_id)
     return render_table_section()
+
 
 @rt("/table/restore", methods=["POST"])
 async def restore_table_data(request):
@@ -441,11 +521,13 @@ async def restore_table_data(request):
         print(f"Error restoring table: {e}")
         return "Error", 500
 
+
 @rt("/table/clear", methods=["POST"])
 def clear_table():
     global table
     table.clear()
     return render_table_section()
+
 
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "5001"))
