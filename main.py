@@ -4,8 +4,16 @@ import json
 import time
 import os
 
-BLOCK_TYPES = ["bestofn", "chainofthought", "codeact", "predict", 
-               "programofthought", "react", "refine", "rlm", "multichaincomparison"]
+SCHEMA_PATH = os.path.join("static", "dspy_schemas.json")
+with open(SCHEMA_PATH, 'r') as f:
+    DSPY_MODULE_SCHEMAS = json.load(f)
+
+BLOCK_TYPES = list(DSPY_MODULE_SCHEMAS.keys())
+
+MODULE_NAMES = {
+    block_type: schema["name"] 
+    for block_type, schema in DSPY_MODULE_SCHEMAS.items()
+}
 
 app, rt = fast_app(
     live=False,
@@ -19,13 +27,13 @@ app, rt = fast_app(
 )
 
 class BlockData:
-    def __init__(self, block_type, position, text=""):
+    def __init__(self, block_type, position):
         global block_id
         self.id = f"b{block_id}"
         self.type = block_type
         self.position = position
-        self.label = block_type
-        self.additional_text = text
+        self.label = MODULE_NAMES.get(block_type, block_type)
+        self.config = {}
         block_id += 1
 
 class TableData:
@@ -122,7 +130,7 @@ def render_palette():
         H3("DSPy Modules", cls="palette-title"),
         *[Div(
             Card(
-                Span(block_type, cls="block-label"),
+                Span(MODULE_NAMES.get(block_type, block_type), cls="block-label"),
                 cls="block-card"
             ),
             draggable="true",
@@ -148,6 +156,8 @@ def render_workspace():
     )
 
 def render_block(block):
+    signature = block.config.get("signature", "") if block.config else ""
+    display_text = signature if signature else "Click to configure"
     return Div(
         Div(
             Div(
@@ -163,14 +173,17 @@ def render_block(block):
             cls="block-header"
         ),
         Div(
-            Span(block.additional_text if block.additional_text else "placeholder for dspy module signature input", 
-                 cls="block-additional-text"),
+            Span(display_text, cls="block-signature"),
             cls="block-text-display"
         ),
         id=block.id,
         draggable="false",
         cls="workspace-block",
-        **{"oncontextmenu": f"showContextMenu(event, '{block.id}'); return false;"}
+        **{
+            "data-type": block.type,
+            "data-config": json.dumps(block.config),
+            "oncontextmenu": f"showContextMenu(event, '{block.id}'); return false;"
+        }
     )
 
 def render_ws():
@@ -301,6 +314,7 @@ def render_rename_column_form(subtable, col_name):
 def get():
     return Container(
         Meta(name="server-start", content=str(int(time.time()))),
+        Script(f"window.DSPY_MODULE_SCHEMAS = {json.dumps(DSPY_MODULE_SCHEMAS)};"),
         Button(
             UkIcon("sun", cls="light-icon"),
             UkIcon("moon", cls="dark-icon"),
@@ -329,13 +343,16 @@ def add_block(btype: str):
     blocks.append(BlockData(btype, len(blocks)))
     return render_ws()
 
-@rt("/update-text/{bid}")
-def update_text(bid: str, text: str):
-    global blocks
-    for block in blocks:
-        if block.id == bid:
-            block.additional_text = text
-            break
+@rt("/update-config/{bid}")
+def update_config(bid: str, config: str):
+    try:
+        config_dict = json.loads(config)
+        for block in blocks:
+            if block.id == bid:
+                block.config = config_dict
+                break
+    except Exception as e:
+        print(f"Error updating config: {e}")
     return render_ws()
 
 @rt("/reorder")

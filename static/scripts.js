@@ -1,7 +1,5 @@
-const BLOCK_TYPES = new Set([
-    "bestofn", "chainofthought", "codeact", "predict",
-    "programofthought", "react", "refine", "rlm", "multichaincomparison"
-]);
+const DSPY_MODULE_SCHEMAS = window.DSPY_MODULE_SCHEMAS || {};
+const BLOCK_TYPES = new Set(Object.keys(DSPY_MODULE_SCHEMAS));
 
 (function() {
     const serverStart = document.querySelector('meta[name="server-start"]')?.content;
@@ -34,7 +32,7 @@ const Storage = {
         this._set('dspy_blocks_data', data);
     },
     loadBlocks() {
-        return this._get('dspy_blocks_data') || { order: [], texts: {} };
+        return this._get('dspy_blocks_data') || { order: [], configs: {} };
     },
     clearBlocks() {
         const keysToClear = [
@@ -77,36 +75,49 @@ const UI = {
         const data = Storage.loadBlocks();
         const blocks = document.querySelectorAll('.workspace-block');
         blocks.forEach(block => {
-            const text = data.texts[block.id];
-            if (text) {
-                const textSpan = block.querySelector('.block-additional-text');
-                if (textSpan) textSpan.textContent = text;
+            const config = data.configs[block.id];
+            if (config) {
+                block.setAttribute('data-config', JSON.stringify(config));
+                const signature = config.signature || "Click to configure";
+                const signatureSpan = block.querySelector('.block-signature');
+                if (signatureSpan) signatureSpan.textContent = signature;
             }
         });
     },
-
-    updateBlockText(blockId, text) {
+    
+    updateBlockConfig(blockId, config) {
         const data = Storage.loadBlocks();
-        if (text && text !== "placeholder for dspy module signature input") {
-            data.texts[blockId] = text;
+        if (config && Object.keys(config).length > 0) {
+            data.configs[blockId] = config;
         } else {
-            delete data.texts[blockId];
+            delete data.configs[blockId];
         }
         Storage.saveBlocks(data);
+        
+        const block = document.getElementById(blockId);
+        if (block) {
+            block.setAttribute('data-config', JSON.stringify(config));
+            const signature = config.signature || "Click to configure";
+            const signatureSpan = block.querySelector('.block-signature');
+            if (signatureSpan) signatureSpan.textContent = signature;
+        }
     },
 
     saveBlocksState() {
         const blocks = document.querySelectorAll('.workspace-block');
         const order = Array.from(blocks).map(b => b.id);
-        const texts = {};
+        const configs = {};
+        
         blocks.forEach(block => {
-            const textSpan = block.querySelector('.block-additional-text');
-            const text = textSpan?.textContent;
-            if (text && text !== "placeholder for dspy module signature input") {
-                texts[block.id] = text;
+            const configAttr = block.getAttribute('data-config');
+            if (configAttr) {
+                try {
+                    configs[block.id] = JSON.parse(configAttr);
+                } catch(e) {}
             }
         });
-        Storage.saveBlocks({ order, texts });
+        
+        Storage.saveBlocks({ order, configs });
     },
     
     saveTableState() {
@@ -232,6 +243,69 @@ document.body.addEventListener('htmx:afterSwap', () => {
 });
 
 // ==================== CONTEXT MENU ====================
+function createInput(paramName, paramConfig, value) {
+    let input;
+    
+    if (paramConfig.type === 'signature') {
+        input = document.createElement('textarea');
+        input.placeholder = "question -> answer";
+        input.value = value || '';
+    } else {
+        input = document.createElement('textarea');
+        input.value = value || '';
+        if (paramConfig.placeholder) input.placeholder = paramConfig.placeholder;
+    }
+    
+    input.dataset.field = paramName;
+    return input;
+}
+
+function renderConfigEditor(container, config, blockType) {
+    const schema = DSPY_MODULE_SCHEMAS[blockType];
+    
+    if (!schema || !schema.parameters) {
+        container.innerHTML = '<p class="config-placeholder">No configuration options available</p>';
+        return;
+    }
+    
+    const form = document.createElement('div');
+    form.className = 'config-form';
+    
+    Object.entries(schema.parameters).forEach(([paramName, paramConfig]) => {
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = 'config-field';
+        
+        const label = document.createElement('label');
+        label.textContent = paramName;
+        label.className = 'config-label';
+        const value = config[paramName] !== undefined ? config[paramName] : paramConfig.default;
+        const input = createInput(paramName, paramConfig, value);
+        
+        fieldDiv.appendChild(label);
+        fieldDiv.appendChild(input);
+        form.appendChild(fieldDiv);
+    });
+    
+    container.appendChild(form);
+}
+
+function getConfigFromEditor(container) {
+    const config = {};
+    
+    container.querySelectorAll('input, textarea').forEach(input => {
+        const fieldName = input.dataset.field;
+        if (!fieldName) return;
+        
+        if (input.type === 'number') {
+            config[fieldName] = parseFloat(input.value);
+        } else {
+            config[fieldName] = input.value;
+        }
+    });
+    
+    return config;
+}
+
 let currentMenu = null;
 
 function closeMenu() {
@@ -244,59 +318,65 @@ function closeMenu() {
 function showContextMenu(event, blockId) {
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
     closeMenu();
     
     const block = document.getElementById(blockId);
-    const textSpan = block?.querySelector('.block-additional-text');
-    const currentText = textSpan?.textContent === "placeholder for dspy module signature input" ? '' : (textSpan?.textContent || '');
+    
+    let currentConfig = {};
+    const configAttr = block.getAttribute('data-config');
+    if (configAttr) {
+        try {
+            currentConfig = JSON.parse(configAttr);
+        } catch(e) {}
+    }
+    
+    const blockType = block.getAttribute('data-type') || 'predict';
     
     const menu = document.createElement('div');
     menu.className = 'block-menu';
     menu.innerHTML = `
         <div class="menu-item">
-            <textarea rows="3" placeholder="Enter dspy module settings" class="menu-textarea">${currentText.replace(/"/g, '&quot;')}</textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <strong>Configure ${DSPY_MODULE_SCHEMAS[blockType]?.name || blockType}</strong>
+                <button class="menu-close-btn">&times;</button>
+            </div>
+            <div class="config-editor"></div>
             <button class="menu-save-btn">Save</button>
         </div>
     `;
     
     menu.style.position = 'fixed';
-    menu.style.left = event.clientX + 'px';
-    menu.style.top = event.clientY + 'px';
+    menu.style.left = Math.min(event.clientX, window.innerWidth - 350) + 'px';
+    menu.style.top = Math.min(event.clientY, window.innerHeight - 400) + 'px';
     
-    const textarea = menu.querySelector('textarea');
-    const saveBtn = menu.querySelector('.menu-save-btn');
+    renderConfigEditor(menu.querySelector('.config-editor'), currentConfig, blockType);
     
-    menu.addEventListener('click', (e) => {
+    menu.querySelector('.menu-save-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-    });
-    
-    saveBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const newText = textarea.value.trim();
-        const textSpan = block.querySelector('.block-additional-text');
-        if (textSpan) textSpan.textContent = newText;
-        UI.updateBlockText(blockId, newText);
-    
-        htmx.ajax('POST', `/update-text/${blockId}`, {
-            values: { text: newText },
-            swap: 'none'
-        });
-    
+        const newConfig = getConfigFromEditor(menu.querySelector('.config-editor'));
+        
+        if (JSON.stringify(newConfig) !== JSON.stringify(currentConfig)) {
+            UI.updateBlockConfig(blockId, newConfig);
+            htmx.ajax('POST', `/update-config/${blockId}`, {
+                values: { config: JSON.stringify(newConfig) },
+                swap: 'none'
+            });
+        }
         closeMenu();
     });
     
-    textarea.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            saveBtn.click();
-        }
-    });
+    menu.addEventListener('click', (e) => e.stopPropagation());
+    menu.addEventListener('contextmenu', (e) => e.stopPropagation());
     
-    textarea.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
+    document.body.appendChild(menu);
+    currentMenu = menu;
+    
+    const firstInput = menu.querySelector('input, textarea, select');
+    if (firstInput) firstInput.focus();
     
     function onClickOutside(e) {
+        if (e.target === block || block.contains(e.target)) return;
         if (!menu.contains(e.target)) {
             closeMenu();
             document.removeEventListener('click', onClickOutside);
@@ -304,9 +384,6 @@ function showContextMenu(event, blockId) {
         }
     }
     
-    document.body.appendChild(menu);
-    currentMenu = menu;
-    textarea.focus();
     setTimeout(() => {
         document.addEventListener('click', onClickOutside);
         document.addEventListener('contextmenu', onClickOutside);

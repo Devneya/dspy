@@ -1,0 +1,65 @@
+{
+    "predict": {
+        "name": "Predict",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "chainofthought": {
+        "name": "ChainOfThought",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "programofthought": {
+        "name": "ProgramOfThought",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "codeact": {
+        "name": "CodeAct",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "react": {
+        "name": "ReAct",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "refine": {
+        "name": "Refine",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "bestofn": {
+        "name": "BestOfN",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "multichaincomparison": {
+        "name": "MultiChainComparison",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "rlm": {
+        "name": "RLM",
+        "parameters": {
+            "signature": {"type": "signature"},
+            "placeholder_param": {"type": "int"}
+        }
+    }
+}
