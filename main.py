@@ -16,16 +16,15 @@ MODULE_NAMES = {
 
 app, rt = fast_app(
     live=False,
-    hdrs=(
-        Theme.blue.headers(),
+    hdrs=Theme.blue.headers(daisy=True, icons=True)
+    + [
         Meta(name="live-reload", content="disabled"),
-        Link(rel="stylesheet", href="/static/styles.css"),
         Script(
             src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js",
             defer=True,
         ),
         Script(src="/static/scripts.js", defer=True),
-    ),
+    ],
 )
 
 
@@ -136,37 +135,63 @@ table = TableData()
 
 
 def render_palette():
-    return Div(
+    return Card(
         H3("DSPy Modules", cls="palette-title"),
-        *[
-            Div(
-                Card(
-                    Span(MODULE_NAMES.get(block_type, block_type), cls="block-label"),
-                    cls="block-card",
-                ),
-                draggable="true",
-                **{"data-block-type": block_type},
-                cls="draggable-item",
-            )
-            for block_type in BLOCK_TYPES
-        ],
-        cls="palette-scroll",
+        Div(
+            *[
+                Div(
+                    Card(
+                        Span(
+                            MODULE_NAMES.get(block_type, block_type), cls="block-label"
+                        ),
+                        cls=CardT.hover,
+                    ),
+                    draggable="true",
+                    **{"data-block-type": block_type},
+                    cls="draggable-item cursor-grab",
+                )
+                for block_type in BLOCK_TYPES
+            ],
+            cls="palette-scroll space-y-2",
+        ),
         id="palette",
+        cls="w-72",
     )
 
 
 def render_workspace():
     if not blocks:
         return Div(
-            DivCentered(P("Drop modules here", cls="empty-message")),
+            DivCentered(
+                P("Drop modules here", cls="text-muted-foreground text-lg"), cls="py-20"
+            ),
             id="working-area",
-            cls="empty-workspace",
+            cls="border-2 border-dashed min-h-[200px]",
         )
 
     return Div(
         *[render_block(b) for b in sorted(blocks, key=lambda x: x.position)],
         id="working-area",
-        cls="workspace",
+        cls="min-h-[200px]",
+    )
+
+
+def render_ws():
+    return Div(
+        Div(H3("Workspace", cls="workspace-title text-xl font-semibold")),
+        render_workspace(),
+        Div(
+            Button(
+                "Clear All",
+                hx_post="/clear",
+                hx_target="#ws",
+                hx_swap="outerHTML",
+                cls=ButtonT.destructive,
+            ),
+            cls="mt-4",
+        ),
+        id="ws",
+        cls="flex-1",
     )
 
 
@@ -176,86 +201,131 @@ def render_block(block):
     return Div(
         Div(
             Div(
-                Span(block.label, cls="block-label"),
-                Span(block.id, cls="block-id"),
+                Span(block.label, cls="font-medium"),
+                Span(block.id, cls="text-xs text-muted-foreground ml-2"),
+                cls="flex items-center gap-2",
             ),
             Button(
-                UkIcon("x", height=16),
+                UkIcon("x", height=14),
                 hx_post=f"/rm/{block.id}",
                 hx_target="#ws",
                 hx_swap="outerHTML",
+                cls=ButtonT.ghost + " p-0.5",
             ),
-            cls="block-header",
+            cls="flex justify-between items-center",
         ),
-        Div(Span(display_text, cls="block-signature"), cls="block-text-display"),
+        Div(
+            Span(display_text, cls="font-mono text-xs text-muted-foreground"),
+            cls="mt-1 pt-1",
+        ),
         id=block.id,
-        draggable="false",
-        cls="workspace-block",
-        **{
-            "data-type": block.type,
-            "data-config": json.dumps(block.config),
-            "oncontextmenu": f"showContextMenu(event, '{block.id}'); return false;",
-        },
+        draggable="true",
+        cls="workspace-block p-2 border rounded mb-1 bg-card cursor-move",
+        data_type=block.type,
+        data_config=json.dumps(block.config),
     )
 
 
-def render_ws():
-    return Div(
-        Div(H3("Workspace", cls="workspace-title")),
-        render_workspace(),
+def render_context_menu(block_id, block_type, current_config):
+    schema = DSPY_MODULE_SCHEMAS.get(block_type.lower(), {})
+    parameters = schema.get("parameters", {})
+
+    form_fields = []
+    for param_name, param_config in parameters.items():
+        if param_name == "signature":
+            form_fields.append(
+                Div(
+                    LabelInput(
+                        param_name.title(),
+                        id=param_name,
+                        value=current_config.get(param_name, ""),
+                        placeholder="question -> answer",
+                        cls="w-full",
+                    ),
+                    cls="mb-3",
+                )
+            )
+        else:
+            input_type = "number" if param_config.get("type") == "int" else "text"
+            form_fields.append(
+                Div(
+                    LabelInput(
+                        param_name.title(),
+                        id=param_name,
+                        value=current_config.get(param_name, ""),
+                        type=input_type,
+                        cls="w-full",
+                    ),
+                    cls="mb-3",
+                )
+            )
+
+    return Card(
         Div(
-            Button(
-                "Clear All",
-                hx_post="/clear",
-                hx_target="#ws",
-                hx_swap="outerHTML",
-                cls="clear-btn",
+            Div(
+                H4(f"Configure {block_type}", cls="text-lg font-semibold"),
+                Button(UkIcon("x"), cls=ButtonT.ghost + " p-1 menu-close-btn"),
+                cls="flex justify-between items-center mb-4",
             ),
+            Divider(cls="my-2"),
+            Div(*form_fields, cls="my-3"),
+            Divider(cls="my-2"),
+            Div(
+                Button(
+                    UkIcon("save", height=16),
+                    cls=ButtonT.primary + " menu-save-btn flex items-center gap-2",
+                ),
+                cls="flex justify-end mt-4",
+            ),
+            cls="p-4",
         ),
-        id="ws",
-        cls="workspace-container",
+        id=f"menu-{block_id}",
+        cls="fixed z-50 w-96 shadow-xl border rounded-lg bg-card",
     )
 
 
 def render_table_section():
-    return Div(
-        Div(H3("Training Data", cls="table-main-title"), cls="table-header-row"),
+    return Card(
+        Div(
+            H3("Training Data", cls="table-main-title text-lg font-semibold"),
+            cls="table-header-row mb-4",
+        ),
         Div(
             Div(
                 Div(
                     Div(
-                        H4("Inputs", cls="subtable-title"),
+                        H4("Inputs", cls="subtable-title text-md font-medium"),
                         render_columns_section("inputs"),
-                        cls="subtable-header",
+                        cls="subtable-header mb-4",
                     ),
                     render_data_table("inputs"),
-                    cls="subtable",
+                    cls="subtable p-4 border rounded",
                 ),
                 Div(
                     Div(
-                        H4("Outputs", cls="subtable-title"),
+                        H4("Outputs", cls="subtable-title text-md font-medium"),
                         render_columns_section("outputs"),
-                        cls="subtable-header",
+                        cls="subtable-header mb-4",
                     ),
                     render_data_table("outputs"),
-                    cls="subtable",
+                    cls="subtable p-4 border rounded",
                 ),
-                cls="subtables-side-by-side",
+                cls="subtables-side-by-side grid grid-cols-2 gap-6",
             ),
             Div(
                 Button(
                     UkIcon("plus", height=18),
-                    cls="add-row-btn",
+                    cls=ButtonT.primary + " rounded-full w-10 h-10 p-0",
                     hx_post="/table/add-row",
                     hx_target="#table-section",
                     hx_swap="outerHTML",
                 ),
-                cls="add-row-button-container",
+                cls="add-row-button-container flex justify-center mt-4",
             ),
             cls="table-content",
         ),
         id="table-section",
-        cls="table-container",
+        cls="w-full",
     )
 
 
@@ -266,12 +336,12 @@ def render_columns_section(subtable):
             *[render_column_tag(subtable, col) for col in columns],
             Button(
                 UkIcon("plus", height=12),
-                cls="add-column-btn",
+                cls=ButtonT.secondary + " text-xs px-2 py-1",
                 hx_post=f"/table/add-column/{subtable}",
                 hx_target="#table-section",
                 hx_swap="outerHTML",
             ),
-            cls="columns-list",
+            cls="columns-list flex flex-wrap gap-2 items-center",
         ),
         cls="columns-manager",
     )
@@ -279,10 +349,10 @@ def render_columns_section(subtable):
 
 def render_column_tag(subtable, col_name):
     return Span(
-        Span(col_name, cls="column-name-text"),
+        Span(col_name, cls="column-name-text mr-1"),
         Button(
             UkIcon("edit-2", height=10),
-            cls="rename-column-btn",
+            cls=ButtonT.ghost + " p-1",
             title="Rename",
             hx_get=f"/table/rename-column-form/{subtable}/{col_name}",
             hx_target=f"#column-{subtable}-{col_name.replace(' ', '-')}",
@@ -290,7 +360,7 @@ def render_column_tag(subtable, col_name):
         ),
         Button(
             UkIcon("x", height=10),
-            cls="delete-column-btn",
+            cls=ButtonT.ghost + " p-1 text-destructive",
             title="Delete",
             hx_post=f"/table/delete-column/{subtable}/{col_name}",
             hx_target="#table-section",
@@ -298,27 +368,29 @@ def render_column_tag(subtable, col_name):
             hx_confirm="Delete this column?",
         ),
         id=f"column-{subtable}-{col_name.replace(' ', '-')}",
-        cls="column-tag",
+        cls="column-tag inline-flex items-center gap-1 px-2 py-1 border rounded text-xs",
     )
 
 
 def render_data_table(subtable):
     if not table.entries[subtable]["rows"]:
-        return Div(cls="table-empty")
+        return Div(cls="table-empty text-center py-10 text-muted-foreground")
+
     columns = table.entries[subtable]["columns"]
     rows = table.entries[subtable]["rows"]
     headers = ["#"] + columns + [""]
+
     table_rows = []
     for row in rows:
         cells = [
-            Td(row["id"], cls="table-cell-id"),
+            Td(row["id"], cls="table-cell-id px-2 py-1"),
             *[
                 Td(
                     Input(
                         type="text",
                         name=f"{subtable}_{row['id']}_{col}",
                         value=row.get(col, ""),
-                        cls="inline-input",
+                        cls="inline-input w-full px-2 py-1 border rounded",
                     ),
                     cls="table-cell",
                 )
@@ -327,21 +399,25 @@ def render_data_table(subtable):
             Td(
                 Button(
                     UkIcon("trash-2", height=14),
-                    cls="delete-entry-btn",
+                    cls=ButtonT.ghost + " p-1 text-destructive",
                     hx_post=f"/table/delete-row/{row['id']}",
                     hx_target="#table-section",
                     hx_swap="outerHTML",
                     hx_confirm="Delete this row?",
                 ),
-                cls="table-cell-actions",
+                cls="table-cell-actions text-center",
             ),
         ]
         table_rows.append(Tr(*cells))
+
     return Div(
         Table(
-            Thead(Tr(*[Th(header) for header in headers])),
+            Thead(
+                Tr(*[Th(header, cls="px-2 py-1 text-left") for header in headers]),
+                cls="bg-muted",
+            ),
             Tbody(*table_rows),
-            cls="data-table",
+            cls="data-table w-full border-collapse",
         ),
         id=f"{subtable}-table-body",
     )
@@ -355,14 +431,18 @@ def render_rename_column_form(subtable, col_name):
                 name="new_name",
                 value=col_name,
                 required=True,
-                cls="rename-input",
+                cls="rename-input px-2 py-1 text-xs border rounded",
                 autofocus=True,
             ),
-            Button(UkIcon("check", height=10), type="submit", cls="rename-save-btn"),
+            Button(
+                UkIcon("check", height=10),
+                type="submit",
+                cls=ButtonT.primary + " p-1",
+            ),
             Button(
                 UkIcon("x", height=10),
                 type="button",
-                cls="rename-cancel-btn",
+                cls=ButtonT.ghost + " p-1",
                 hx_get=f"/table/cancel-rename/{subtable}/{col_name}",
                 hx_target=f"#column-{subtable}-{col_name.replace(' ', '-')}",
                 hx_swap="outerHTML",
@@ -370,9 +450,9 @@ def render_rename_column_form(subtable, col_name):
             hx_post=f"/table/rename-column/{subtable}/{col_name}",
             hx_target="#table-section",
             hx_swap="outerHTML",
-            cls="rename-form",
+            cls="rename-form inline-flex gap-1 items-center",
         ),
-        cls="column-tag editing",
+        cls="column-tag editing inline-flex items-center gap-1",
     )
 
 
@@ -384,19 +464,19 @@ def get():
     return Container(
         Meta(name="server-start", content=str(int(time.time()))),
         Script(f"window.DSPY_MODULE_SCHEMAS = {json.dumps(DSPY_MODULE_SCHEMAS)};"),
-        Button(
+        ToggleBtn(
             UkIcon("sun", cls="light-icon"),
             UkIcon("moon", cls="dark-icon"),
-            cls="theme-toggle-btn",
+            cls="theme-toggle-btn fixed top-5 right-5 z-50",
             id="theme-toggle",
         ),
-        H1("DSPy Module Builder", cls="main-title"),
+        H1("DSPy Module Builder", cls="main-title text-4xl text-center my-6"),
         Div(
-            Div(render_palette(), render_ws(), cls="palette-workspace-row"),
+            Div(render_palette(), render_ws(), cls="palette-workspace-row flex gap-6"),
             render_table_section(),
-            cls="main-vertical-layout",
+            cls="main-vertical-layout flex flex-col gap-5",
         ),
-        cls="container",
+        cls="container max-w-7xl mx-auto px-4",
     )
 
 
@@ -422,6 +502,20 @@ def update_config(bid: str, config: str):
     except Exception as e:
         print(f"Error updating config: {e}")
     return render_ws()
+
+
+@rt("/context-menu/{block_id}")
+def get_context_menu(block_id: str):
+    block = next((b for b in blocks if b.id == block_id), None)
+    if not block:
+        return ""
+
+    block_type = block.type
+    current_config = block.config or {}
+    block_name = MODULE_NAMES.get(block_type, block_type)
+    menu = render_context_menu(block_id, block_name, current_config)
+
+    return Html(menu)
 
 
 @rt("/reorder")

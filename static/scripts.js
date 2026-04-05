@@ -270,160 +270,73 @@ document.body.addEventListener("htmx:afterSwap", () => {
 });
 
 // ==================== CONTEXT MENU ====================
-function createInput(paramName, paramConfig, value) {
-  let input;
-
-  if (paramConfig.type === "signature") {
-    input = document.createElement("textarea");
-    input.placeholder = "question -> answer";
-    input.value = value || "";
-  } else {
-    input = document.createElement("textarea");
-    input.value = value || "";
-    if (paramConfig.placeholder) input.placeholder = paramConfig.placeholder;
-  }
-
-  input.dataset.field = paramName;
-  return input;
-}
-
-function renderConfigEditor(container, config, blockType) {
-  const schema = DSPY_MODULE_SCHEMAS[blockType];
-
-  if (!schema || !schema.parameters) {
-    container.innerHTML =
-      '<p class="config-placeholder">No configuration options available</p>';
-    return;
-  }
-
-  const form = document.createElement("div");
-  form.className = "config-form";
-
-  Object.entries(schema.parameters).forEach(([paramName, paramConfig]) => {
-    const fieldDiv = document.createElement("div");
-    fieldDiv.className = "config-field";
-
-    const label = document.createElement("label");
-    label.textContent = paramName;
-    label.className = "config-label";
-    const value =
-      config[paramName] !== undefined ? config[paramName] : paramConfig.default;
-    const input = createInput(paramName, paramConfig, value);
-
-    fieldDiv.appendChild(label);
-    fieldDiv.appendChild(input);
-    form.appendChild(fieldDiv);
-  });
-
-  container.appendChild(form);
-}
-
-function getConfigFromEditor(container) {
-  const config = {};
-
-  container.querySelectorAll("input, textarea").forEach((input) => {
-    const fieldName = input.dataset.field;
-    if (!fieldName) return;
-
-    if (input.type === "number") {
-      config[fieldName] = parseFloat(input.value);
-    } else {
-      config[fieldName] = input.value;
-    }
-  });
-
-  return config;
-}
-
 let currentMenu = null;
 
 function closeMenu() {
-  if (currentMenu) {
-    currentMenu.remove();
-    currentMenu = null;
-  }
+  currentMenu?.remove();
+  currentMenu = null;
 }
 
-function showContextMenu(event, blockId) {
+window.showContextMenu = async (event, blockId) => {
   event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
   closeMenu();
 
-  const block = document.getElementById(blockId);
+  try {
+    const res = await fetch(`/context-menu/${blockId}`);
+    const html = await res.text();
+    if (!html?.length) return;
 
-  let currentConfig = {};
-  const configAttr = block.getAttribute("data-config");
-  if (configAttr) {
-    try {
-      currentConfig = JSON.parse(configAttr);
-    } catch (e) {}
-  }
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    const menu = div.firstElementChild;
+    if (!menu) return;
 
-  const blockType = block.getAttribute("data-type") || "predict";
+    Object.assign(menu.style, {
+      position: "fixed",
+      left: `${Math.min(event.clientX + 10, window.innerWidth - 320)}px`,
+      top: `${Math.min(event.clientY + 10, window.innerHeight - 400)}px`,
+      zIndex: "100000",
+    });
 
-  const menu = document.createElement("div");
-  menu.className = "block-menu";
-  menu.innerHTML = `
-        <div class="menu-item">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <strong>Configure ${DSPY_MODULE_SCHEMAS[blockType]?.name || blockType}</strong>
-                <button class="menu-close-btn">&times;</button>
-            </div>
-            <div class="config-editor"></div>
-            <button class="menu-save-btn">Save</button>
-        </div>
-    `;
+    document.body.appendChild(menu);
+    currentMenu = menu;
 
-  menu.style.position = "fixed";
-  menu.style.left = Math.min(event.clientX, window.innerWidth - 350) + "px";
-  menu.style.top = Math.min(event.clientY, window.innerHeight - 400) + "px";
-
-  renderConfigEditor(
-    menu.querySelector(".config-editor"),
-    currentConfig,
-    blockType,
-  );
-
-  menu.querySelector(".menu-save-btn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    const newConfig = getConfigFromEditor(menu.querySelector(".config-editor"));
-
-    if (JSON.stringify(newConfig) !== JSON.stringify(currentConfig)) {
-      UI.updateBlockConfig(blockId, newConfig);
-      htmx.ajax("POST", `/update-config/${blockId}`, {
-        values: { config: JSON.stringify(newConfig) },
-        swap: "none",
+    menu.querySelector(".menu-save-btn")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      const config = {};
+      menu.querySelectorAll("input, textarea, select").forEach((input) => {
+        if (input.id) config[input.id] = input.value;
       });
-    }
-    closeMenu();
-  });
 
-  menu.addEventListener("click", (e) => e.stopPropagation());
-  menu.addEventListener("contextmenu", (e) => e.stopPropagation());
-
-  document.body.appendChild(menu);
-  currentMenu = menu;
-
-  const firstInput = menu.querySelector("input, textarea, select");
-  if (firstInput) firstInput.focus();
-
-  function onClickOutside(e) {
-    if (e.target === block || block.contains(e.target)) return;
-    if (!menu.contains(e.target)) {
+      if (Object.keys(config).length) {
+        UI.updateBlockConfig(blockId, config);
+        htmx.ajax("POST", `/update-config/${blockId}`, {
+          values: { config: JSON.stringify(config) },
+          swap: "none",
+        });
+      }
       closeMenu();
-      document.removeEventListener("click", onClickOutside);
-      document.removeEventListener("contextmenu", onClickOutside);
-    }
+    });
+  } catch (err) {
+    console.error("Context menu error:", err);
   }
+};
 
-  setTimeout(() => {
-    document.addEventListener("click", onClickOutside);
-    document.addEventListener("contextmenu", onClickOutside);
-  }, 0);
-}
+document.body.addEventListener("contextmenu", (e) => {
+  const block = e.target.closest(".workspace-block");
+  if (block) {
+    e.preventDefault();
+    window.showContextMenu(e, block.id);
+  }
+});
 
-window.showContextMenu = showContextMenu;
+document.body.addEventListener("click", (e) => {
+  if (currentMenu && !currentMenu.contains(e.target)) closeMenu();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && currentMenu) closeMenu();
+});
 
 // ==================== DRAG & DROP ====================
 document.addEventListener("dragstart", (e) => {
@@ -465,6 +378,7 @@ function initSortable() {
   area._sortable = new Sortable(area, {
     animation: 200,
     handle: ".workspace-block",
+    draggable: ".workspace-block",
     onEnd: () => {
       const order = Array.from(area.children).map((c) => c.id);
       UI.saveBlocksState();
