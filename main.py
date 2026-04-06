@@ -131,6 +131,7 @@ class TableData:
         return self.columns
 
 
+init_predict = False
 blocks = []
 block_id = 1
 table = TableData()
@@ -149,7 +150,7 @@ def render_palette():
                         UkIcon("grip-vertical", height=14, cls="mr-2"),
                         MODULE_NAMES.get(block_type, block_type),
                         cls=ButtonT.default
-                        + " w-full justify-start cursor-grab active:cursor-grabbing",
+                        + " w-full justify-start cursor-grab active:cursor-grabbing rounded",
                         draggable="true",
                         **{"data-block-type": block_type},
                     ),
@@ -177,7 +178,7 @@ def render_workspace():
                 cls="py-10",
             ),
             id="working-area",
-            cls="border-2 border-dashed rounded-lg",
+            cls="border-2 border-dashed",
         )
     )
 
@@ -191,7 +192,7 @@ def render_workspace():
                 hx_target="#main-container",
                 hx_swap="outerHTML",
                 hx_confirm="Remove all blocks and clear all training data?",
-                cls=ButtonT.destructive,
+                cls=ButtonT.destructive + " rounded",
             ),
             cls="mt-4",
         ),
@@ -213,7 +214,7 @@ def render_block(block):
                 hx_post=f"/rm/{block.id}",
                 hx_target="#main-container",
                 hx_swap="outerHTML",
-                cls=ButtonT.ghost + " p-1",
+                cls=ButtonT.ghost + " p-1 rounded",
             ),
             cls="flex justify-between items-center",
         ),
@@ -223,7 +224,7 @@ def render_block(block):
         ),
         id=block.id,
         draggable="true",
-        cls="workspace-block p-3 border rounded-lg bg-card cursor-move",
+        cls="workspace-block p-3 border bg-card cursor-move",
         data_type=block.type,
         data_signature=block.signature,
         data_params=json.dumps(block.params),
@@ -265,7 +266,7 @@ def render_context_menu(block_id, block_type, current_signature, current_params)
             id="signature-input",
             value=current_signature,
             placeholder="input: type -> output: type",
-            cls="w-full px-3 py-2 border rounded-md text-sm",
+            cls="w-full px-3 py-2 border text-sm",
         ),
         id="signature-tab",
     )
@@ -309,12 +310,12 @@ def render_context_menu(block_id, block_type, current_signature, current_params)
             Divider(cls="my-4"),
             Button(
                 DivLAligned(UkIcon("save", height=16), " Save"),
-                cls=ButtonT.primary + " w-full menu-save-btn",
+                cls=ButtonT.primary + " w-full rounded menu-save-btn",
             ),
             cls="p-4",
         ),
         id=f"menu-{block_id}",
-        cls="fixed z-50 w-96 shadow-xl border rounded-lg bg-card",
+        cls="fixed z-50 w-96 shadow-xl border bg-card",
     )
 
 
@@ -330,7 +331,7 @@ def render_table_section():
                     "Configure block signatures to create columns",
                     cls="text-muted-foreground text-center py-10",
                 ),
-                cls="border-2 border-dashed rounded-lg",
+                cls="border-2 border-dashed",
             ),
             id="table-section",
             cls="w-full",
@@ -357,7 +358,7 @@ def render_table_section():
             Td(
                 Button(
                     UkIcon("trash-2", height=14),
-                    cls=ButtonT.ghost + " p-1 text-destructive",
+                    cls=ButtonT.ghost + " p-1 text-destructive rounded",
                     hx_post=f"/table/delete-row/{row['id']}",
                     hx_target="#table-section",
                     hx_swap="outerHTML",
@@ -402,14 +403,14 @@ def render_table_section():
             Div(
                 Button(
                     DivLAligned(UkIcon("plus", height=16), " Add Row"),
-                    cls=ButtonT.primary,
+                    cls=ButtonT.primary + " rounded",
                     hx_post="/table/add-row",
                     hx_target="#table-section",
                     hx_swap="outerHTML",
                 ),
                 Button(
                     DivLAligned(UkIcon("trash-2", height=16), " Clear All"),
-                    cls=ButtonT.destructive,
+                    cls=ButtonT.destructive + " rounded",
                     hx_post="/table/clear",
                     hx_target="#table-section",
                     hx_swap="outerHTML",
@@ -445,6 +446,10 @@ def render_full_page():
 
 @rt("/")
 def get():
+    global blocks, init_predict
+    if not blocks and not init_predict:
+        init_predict = True
+        blocks.append(BlockData("predict", len(blocks)))
     return Container(
         Meta(name="server-start", content=str(int(time.time()))),
         Script(f"window.DSPY_MODULE_SCHEMAS = {json.dumps(DSPY_MODULE_SCHEMAS)};"),
