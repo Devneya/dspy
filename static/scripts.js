@@ -8,15 +8,7 @@ const BLOCK_TYPES = new Set(Object.keys(DSPY_MODULE_SCHEMAS));
   const lastServerStart = localStorage.getItem("last_server_start");
 
   if (serverStart && lastServerStart !== serverStart) {
-    const keysToClear = [
-      "dspy_blocks_data",
-      "dspy_blocks_order",
-      "dspy_blocks_text",
-      "dspy_block_labels",
-      "dspy_block_texts",
-      "dspy_table_values",
-      "dspy_table_data",
-    ];
+    const keysToClear = ["dspy_blocks_data", "dspy_table_data"];
     keysToClear.forEach((key) => localStorage.removeItem(key));
     localStorage.setItem("last_server_start", serverStart);
     console.log("Server restart detected - localStorage cleared");
@@ -39,46 +31,22 @@ const Storage = {
     this._set("dspy_blocks_data", data);
   },
   loadBlocks() {
-    return this._get("dspy_blocks_data") || { order: [], configs: {} };
+    return (
+      this._get("dspy_blocks_data") || { order: [], signatures: {}, params: {} }
+    );
   },
   clearBlocks() {
-    const keysToClear = [
-      "dspy_blocks_data",
-      "dspy_blocks_order",
-      "dspy_blocks_text",
-      "dspy_block_labels",
-      "dspy_block_texts",
-    ];
-    keysToClear.forEach((key) => this._remove(key));
+    this._remove("dspy_blocks_data");
   },
 
   saveTable(data) {
-    console.log("Saving table data:", data);
     this._set("dspy_table_data", data);
   },
   loadTableData() {
-    return (
-      this._get("dspy_table_data") || {
-        inputs: {
-          columns: ["default"],
-          rows: [],
-        },
-        outputs: {
-          columns: ["default"],
-          rows: [],
-        },
-      }
-    );
-  },
-  saveTableValues(values) {
-    this._set("dspy_table_values", values);
-  },
-  loadTableValues() {
-    return this._get("dspy_table_values");
+    return this._get("dspy_table_data") || { columns: [], rows: [] };
   },
   clearTable() {
     this._remove("dspy_table_data");
-    this._remove("dspy_table_values");
   },
 };
 
@@ -87,60 +55,70 @@ const UI = {
     const data = Storage.loadBlocks();
     const blocks = document.querySelectorAll(".workspace-block");
     blocks.forEach((block) => {
-      const config = data.configs[block.id];
-      if (config) {
-        block.setAttribute("data-config", JSON.stringify(config));
-        const signature = config.signature || "Click to configure";
-        const signatureSpan = block.querySelector(".block-signature");
+      const signature = data.signatures[block.id];
+      const params = data.params[block.id];
+      if (signature) {
+        block.setAttribute("data-signature", signature);
+        const signatureSpan = block.querySelector(".font-mono");
         if (signatureSpan) signatureSpan.textContent = signature;
+      }
+      if (params) {
+        block.setAttribute("data-params", JSON.stringify(params));
       }
     });
   },
 
-  updateBlockConfig(blockId, config) {
+  updateBlockConfig(blockId, signature, params) {
     const data = Storage.loadBlocks();
-    if (config && Object.keys(config).length > 0) {
-      data.configs[blockId] = config;
+    if (signature) {
+      data.signatures[blockId] = signature;
     } else {
-      delete data.configs[blockId];
+      delete data.signatures[blockId];
+    }
+    if (params && Object.keys(params).length > 0) {
+      data.params[blockId] = params;
+    } else {
+      delete data.params[blockId];
     }
     Storage.saveBlocks(data);
 
     const block = document.getElementById(blockId);
     if (block) {
-      block.setAttribute("data-config", JSON.stringify(config));
-      const signature = config.signature || "Click to configure";
-      const signatureSpan = block.querySelector(".block-signature");
-      if (signatureSpan) signatureSpan.textContent = signature;
+      block.setAttribute("data-signature", signature);
+      block.setAttribute("data-params", JSON.stringify(params));
+      const signatureSpan = block.querySelector(".font-mono");
+      if (signatureSpan)
+        signatureSpan.textContent = signature || "Click to configure";
     }
   },
 
   saveBlocksState() {
     const blocks = document.querySelectorAll(".workspace-block");
     const order = Array.from(blocks).map((b) => b.id);
-    const configs = {};
+    const signatures = {};
+    const params = {};
 
     blocks.forEach((block) => {
-      const configAttr = block.getAttribute("data-config");
-      if (configAttr) {
+      const signatureAttr = block.getAttribute("data-signature");
+      const paramsAttr = block.getAttribute("data-params");
+      if (signatureAttr) {
+        signatures[block.id] = signatureAttr;
+      }
+      if (paramsAttr) {
         try {
-          configs[block.id] = JSON.parse(configAttr);
+          params[block.id] = JSON.parse(paramsAttr);
         } catch (e) {}
       }
     });
 
-    Storage.saveBlocks({ order, configs });
+    Storage.saveBlocks({ order, signatures, params });
   },
 
   saveTableState() {
     const tableState = this.captureTableState();
-    if (
-      tableState &&
-      (tableState.inputs.rows.length > 0 || tableState.outputs.rows.length > 0)
-    ) {
+    if (tableState && tableState.rows.length > 0) {
       Storage.saveTable(tableState);
     }
-    this.saveTableValues();
     htmx
       .ajax("POST", "/table/restore", {
         values: { data: JSON.stringify(tableState) },
@@ -150,80 +128,50 @@ const UI = {
   },
 
   captureTableState() {
-    const inputs = document.querySelectorAll(".inline-input");
-    if (inputs.length === 0) return null;
+    const cells = document.querySelectorAll('input[name^="cell_"]');
+    if (cells.length === 0) return null;
 
-    const tableState = {
-      inputs: { columns: [], rows: [] },
-      outputs: { columns: [], rows: [] },
-    };
+    const tableState = { columns: [], rows: [] };
 
-    document
-      .querySelectorAll(
-        "#inputs-table-body .table-header, #input-table-body .table-header",
-      )
-      .forEach((th) => {
-        const colName = th.textContent.trim();
-        if (colName !== "#") tableState.inputs.columns.push(colName);
-      });
-
-    document
-      .querySelectorAll(
-        "#outputs-table-body .table-header, #output-table-body .table-header",
-      )
-      .forEach((th) => {
-        const colName = th.textContent.trim();
-        if (colName !== "#") tableState.outputs.columns.push(colName);
-      });
-
-    const inputRows = new Map();
-    const outputRows = new Map();
-
-    inputs.forEach((input) => {
-      const name = input.name;
-      const value = input.value;
-
-      const match = name.match(/^(inputs|outputs)_(\d+)_(.+)$/);
-      if (match) {
-        const [, type, rowId, colName] = match;
-        const rowIdNum = parseInt(rowId);
-
-        if (type === "inputs") {
-          if (!inputRows.has(rowIdNum))
-            inputRows.set(rowIdNum, { id: rowIdNum });
-          inputRows.get(rowIdNum)[colName] = value;
-        } else if (type === "outputs") {
-          if (!outputRows.has(rowIdNum))
-            outputRows.set(rowIdNum, { id: rowIdNum });
-          outputRows.get(rowIdNum)[colName] = value;
-        }
+    const headers = document.querySelectorAll("#table-section th");
+    headers.forEach((th, idx) => {
+      if (idx > 0 && idx < headers.length - 1) {
+        tableState.columns.push(th.textContent.trim());
       }
     });
 
-    tableState.inputs.rows = Array.from(inputRows.values());
-    tableState.outputs.rows = Array.from(outputRows.values());
+    const rowsMap = new Map();
+    cells.forEach((cell) => {
+      const match = cell.name.match(/^cell_(\d+)_(.+)$/);
+      if (match) {
+        const [, rowId, colName] = match;
+        const rowIdNum = parseInt(rowId);
+        if (!rowsMap.has(rowIdNum)) {
+          rowsMap.set(rowIdNum, { id: rowIdNum });
+        }
+        rowsMap.get(rowIdNum)[colName] = cell.value;
+      }
+    });
 
-    console.log("Captured table state:", tableState);
+    tableState.rows = Array.from(rowsMap.values());
     return tableState;
   },
 
-  saveTableValues() {
-    const values = {};
-    document.querySelectorAll(".inline-input").forEach((input) => {
-      values[input.name] = input.value;
-    });
-    Storage.saveTableValues(values);
-  },
-
   restoreTableValues() {
-    const values = Storage.loadTableValues();
-    if (!values) return;
+    const data = Storage.loadTableData();
+    if (!data || !data.rows) return;
 
-    console.log("Restoring table values:", values);
-    document.querySelectorAll(".inline-input").forEach((input) => {
-      if (values[input.name] !== undefined) {
-        input.value = values[input.name];
-      }
+    data.rows.forEach((row) => {
+      Object.keys(row).forEach((col) => {
+        if (col !== "id") {
+          const input = document.querySelector(
+            `input[name="cell_${row.id}_${col}"]`,
+          );
+          if (input) {
+            input.value = row[col];
+          }
+        }
+      });
     });
   },
 
@@ -301,22 +249,64 @@ window.showContextMenu = async (event, blockId) => {
     document.body.appendChild(menu);
     currentMenu = menu;
 
-    menu.querySelector(".menu-save-btn")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      const config = {};
-      menu.querySelectorAll("input, textarea, select").forEach((input) => {
-        if (input.id) config[input.id] = input.value;
-      });
+    const signatureTab = document.getElementById("signature-tab");
+    const paramsTab = document.getElementById("params-tab");
+    const sigBtn = document.getElementById("tab-signature-btn");
+    const paramsBtn = document.getElementById("tab-params-btn");
 
-      if (Object.keys(config).length) {
-        UI.updateBlockConfig(blockId, config);
-        htmx.ajax("POST", `/update-config/${blockId}`, {
-          values: { config: JSON.stringify(config) },
-          swap: "none",
+    if (sigBtn && paramsBtn) {
+      sigBtn.onclick = () => {
+        sigBtn.className =
+          "bg-primary text-primary-foreground hover:bg-primary/90 text-sm px-4 py-2 rounded";
+        paramsBtn.className =
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm px-4 py-2 rounded";
+        signatureTab.classList.remove("hidden");
+        paramsTab.classList.add("hidden");
+      };
+      paramsBtn.onclick = () => {
+        paramsBtn.className =
+          "bg-primary text-primary-foreground hover:bg-primary/90 text-sm px-4 py-2 rounded";
+        sigBtn.className =
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm px-4 py-2 rounded";
+        paramsTab.classList.remove("hidden");
+        signatureTab.classList.add("hidden");
+      };
+    }
+
+    menu
+      .querySelector(".menu-save-btn")
+      ?.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const signature =
+          document.getElementById("signature-input")?.value || "";
+        const params = {};
+        menu
+          .querySelectorAll(
+            "#params-tab input, #params-tab select, #params-tab textarea",
+          )
+          .forEach((input) => {
+            if (input.id) {
+              const paramName = input.id.replace("param-", "");
+              params[paramName] = input.value;
+            }
+          });
+
+        UI.updateBlockConfig(blockId, signature, params);
+
+        const formData = new FormData();
+        formData.append("signature", signature);
+        Object.keys(params).forEach((key) => {
+          formData.append(key, params[key]);
         });
-      }
-      closeMenu();
-    });
+
+        await htmx.ajax("POST", `/update-config/${blockId}`, {
+          values: Object.fromEntries(formData),
+          target: "#main-container",
+          swap: "outerHTML",
+        });
+
+        closeMenu();
+      });
   } catch (err) {
     console.error("Context menu error:", err);
   }
@@ -361,7 +351,7 @@ document.addEventListener("drop", (e) => {
     isDropping = true;
     htmx
       .ajax("POST", `/add/${type}`, {
-        target: "#ws",
+        target: "#main-container",
         swap: "outerHTML",
       })
       .finally(() => {
@@ -383,7 +373,7 @@ function initSortable() {
       const order = Array.from(area.children).map((c) => c.id);
       UI.saveBlocksState();
       htmx.ajax("POST", "/reorder", {
-        target: "#ws",
+        target: "#main-container",
         values: { order: JSON.stringify(order) },
         swap: "outerHTML",
       });
@@ -392,8 +382,7 @@ function initSortable() {
 }
 
 document.body.addEventListener("input", (e) => {
-  if (e.target.classList && e.target.classList.contains("inline-input")) {
-    UI.saveTableValues();
+  if (e.target.name && e.target.name.startsWith("cell_")) {
     UI.saveTableState();
   }
 });
@@ -404,10 +393,11 @@ document.body.addEventListener("htmx:afterSwap", (evt) => {
       UI.restoreTableValues();
     }, 50);
   }
-  if (evt.detail.target?.id === "ws") {
+  if (evt.detail.target?.id === "main-container") {
     setTimeout(() => {
       UI.restoreBlocks();
       initSortable();
+      UI.restoreTableValues();
     }, 50);
   }
 });
@@ -424,7 +414,7 @@ function initialize() {
     window.initialBlockLoadDone = true;
     htmx
       .ajax("POST", "/reorder", {
-        target: "#ws",
+        target: "#main-container",
         values: { order: JSON.stringify(blocksData.order) },
         swap: "outerHTML",
       })
@@ -436,11 +426,7 @@ function initialize() {
   }
 
   const tableData = Storage.loadTableData();
-  if (
-    tableData &&
-    (tableData.inputs.rows.length > 0 || tableData.outputs.rows.length > 0) &&
-    !window.initialTableLoadDone
-  ) {
+  if (tableData && tableData.rows.length > 0 && !window.initialTableLoadDone) {
     window.initialTableLoadDone = true;
     htmx
       .ajax("POST", "/table/restore", {
