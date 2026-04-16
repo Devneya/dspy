@@ -1,0 +1,56 @@
+{
+    "predict": {
+        "name": "Predict",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "chainofthought": {
+        "name": "ChainOfThought",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "programofthought": {
+        "name": "ProgramOfThought",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "codeact": {
+        "name": "CodeAct",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "react": {
+        "name": "ReAct",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "refine": {
+        "name": "Refine",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "bestofn": {
+        "name": "BestOfN",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "multichaincomparison": {
+        "name": "MultiChainComparison",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    },
+    "rlm": {
+        "name": "RLM",
+        "parameters": {
+            "placeholder_param": {"type": "int"}
+        }
+    }
+}
