@@ -28,30 +28,6 @@ app, rt = fast_app(
 )
 
 
-def parse_signature(signature_str):
-    if not signature_str or "->" not in signature_str:
-        return [], []
-
-    inputs_part, outputs_part = map(str.strip, signature_str.split("->", 1))
-
-    def parse_fields(fields_str):
-        if not fields_str:
-            return []
-        fields = []
-        for field in fields_str.split(","):
-            field = field.strip()
-            if not field:
-                continue
-            if ":" in field:
-                name, type = field.split(":", 1)
-                fields.append((name.strip(), type.strip()))
-            else:
-                fields.append((field, "str"))
-        return fields
-
-    return parse_fields(inputs_part), parse_fields(outputs_part)
-
-
 class BlockData:
     def __init__(self, block_type, position):
         global block_id
@@ -59,42 +35,66 @@ class BlockData:
         self.type = block_type
         self.position = position
         self.label = MODULE_NAMES.get(block_type, block_type)
-        self.signature = ""
+        self.input_columns = self.get_default_input_columns(position)
+        self.output_columns = self.get_default_output_columns(position)
         self.params = {}
         block_id += 1
+
+    def get_default_input_columns(self, position):
+        if position == 0:
+            return ["Question"]
+        prev_block = blocks[position - 1] if position > 0 else None
+        if prev_block and prev_block.output_columns:
+            return [prev_block.output_columns[0]]
+        return ["Input"]
+
+    def get_default_output_columns(self, position):
+        return ["Answer"] if position == 0 else [f"Output_{position+1}"]
+
+    def get_columns(self, table_type):
+        return self.input_columns if table_type == "inputs" else self.output_columns
+
+    def get_used_column_names(self, table_type=None):
+        used = set()
+        for b in blocks:
+            if b.position < self.position:
+                used.update([c for c in b.input_columns if c and c.strip()])
+                used.update([c for c in b.output_columns if c and c.strip()])
+        if table_type == "outputs":
+            used.update([c for c in self.input_columns if c and c.strip()])
+            used.update([c for c in self.output_columns if c and c.strip()])
+        return used
+
+    def delete_column(self, table_type, col_index):
+        columns = self.input_columns if table_type == "inputs" else self.output_columns
+        if col_index < len(columns):
+            return columns.pop(col_index)
+        return None
 
 
 class TableData:
     def __init__(self):
-        self.columns = []
+        self.columns = {"Question", "Answer"}
         self.rows = []
         self.next_id = 1
 
-    def update_columns_from_blocks(self, blocks):
-        new_columns = set()
-        for block in blocks:
-            if block.signature:
-                inputs, outputs = parse_signature(block.signature)
-                for name, type in inputs:
-                    new_columns.add(f"{name}: {type}")
-                for name, type in outputs:
-                    new_columns.add(f"{name}: {type}")
+    def sync_columns_from_blocks(self, blocks):
+        new_cols = {
+            c
+            for b in blocks
+            for c in (*b.input_columns, *b.output_columns)
+            if c and c.strip()
+        } or {"Question", "Answer"}
 
-        old_columns = self.columns
-        self.columns = sorted(list(new_columns))
-
-        if old_columns and self.rows:
-            new_rows = []
+        if self.columns != new_cols:
             for row in self.rows:
-                new_row = {"id": row["id"]}
-                for col in self.columns:
-                    new_row[col] = row.get(col, "")
-                new_rows.append(new_row)
-            self.rows = new_rows
-        elif not self.columns:
-            self.rows = []
+                for col in new_cols - set(row.keys()):
+                    row[col] = ""
+                for col in set(row.keys()) - new_cols - {"id"}:
+                    del row[col]
+            self.columns = new_cols
 
-        return self.columns
+        return list(self.columns)
 
     def add_row(self):
         row = {"id": self.next_id}
@@ -106,6 +106,9 @@ class TableData:
 
     def delete_row(self, row_id):
         self.rows = [r for r in self.rows if r["id"] != row_id]
+        for i, row in enumerate(self.rows, 1):
+            row["id"] = i
+        self.next_id = len(self.rows) + 1
         return self.rows
 
     def clear_rows(self):
@@ -113,331 +116,493 @@ class TableData:
         self.next_id = 1
         return self.rows
 
-    def clear(self):
-        self.columns = []
-        self.rows = []
-        self.next_id = 1
-        return self.columns
-
-    def restore(self, data):
-        if "columns" in data:
-            self.columns = data["columns"]
-        if "rows" in data:
-            self.rows = data["rows"]
-        max_id = 0
+    def update_cell(self, row_id, col_name, value):
         for row in self.rows:
-            max_id = max(max_id, row.get("id", 0))
-        self.next_id = max_id + 1 if max_id > 0 else 1
-        return self.columns
+            if row["id"] == row_id:
+                row[col_name] = value
+                return True
+        return False
 
 
 init_predict = False
 blocks = []
 block_id = 1
+active_block_id = None
 table = TableData()
+view_mode = "tabs"
 
 
 # ==================== RENDER FUNCTIONS ====================
 
 
-def render_palette():
-    return Card(
-        H3("DSPy Modules", cls="text-lg font-semibold mb-3"),
+# ========= TABS TABLE =========
+
+
+def render_tab_item(block):
+    is_active = active_block_id == block.id
+    active_cls = "border-primary text-primary" if is_active else "border-transparent"
+    return DivLAligned(
+        UkIcon("grip-vertical", height=14, cls="cursor-grab text-muted-foreground"),
+        Span(block.label),
+        Button(
+            UkIcon("x", height=12),
+            cls=(ButtonT.ghost, "text-destructive p-0.5"),
+            hx_post=f"/rm/{block.id}",
+            hx_target="#main-container",
+            hx_swap="outerHTML",
+            **{"onclick": "event.stopPropagation()"},
+        ),
+        cls=f"px-4 py-2 cursor-pointer border-b-2 {active_cls} gap-2",
+        id=f"tab-{block.id}",
+        **{
+            "data-block-id": block.id,
+            "hx_get": f"/select-tab/{block.id}",
+            "hx_target": "#main-container",
+            "hx_swap": "outerHTML",
+        },
+    )
+
+
+def render_add_block_dropdown():
+    return Div(
+        Button(
+            UkIcon("plus", height=16),
+            cls=ButtonT.primary,
+            **{"onclick": "toggleAddBlockMenu()"},
+        ),
         Div(
             *[
-                Div(
-                    Button(
-                        UkIcon("grip-vertical", height=14, cls="mr-2"),
-                        MODULE_NAMES.get(block_type, block_type),
-                        cls=ButtonT.default
-                        + " w-full justify-start cursor-grab active:cursor-grabbing rounded",
-                        draggable="true",
-                        **{"data-block-type": block_type},
-                    ),
-                    cls="cursor-grab active:cursor-grabbing",
+                Button(
+                    MODULE_NAMES.get(block_type, block_type),
+                    cls=(ButtonT.default, "w-full justify-start"),
+                    hx_post=f"/add/{block_type}",
+                    hx_target="#main-container",
+                    hx_swap="outerHTML",
+                    **{"onclick": "toggleAddBlockMenu()"},
                 )
                 for block_type in BLOCK_TYPES
             ],
-            cls="space-y-2",
+            id="add-block-menu",
+            cls="hidden absolute right-0 z-50 mt-1 w-56",
         ),
-        cls="w-72",
+        cls="relative ml-2",
     )
 
 
-def render_workspace():
-    workspace = (
-        Div(
-            *[render_block(b) for b in sorted(blocks, key=lambda x: x.position)],
-            id="working-area",
-            cls="space-y-2",
-        )
-        if blocks
-        else Div(
-            DivCentered(
-                P("Drag and drop modules here", cls="text-muted-foreground text-lg"),
-                cls="py-10",
+def render_tabs():
+    if not blocks:
+        return render_empty_state()
+
+    return DivVStacked(
+        DivFullySpaced(
+            DivLAligned(
+                DivLAligned(
+                    *[
+                        render_tab_item(block)
+                        for block in sorted(blocks, key=lambda x: x.position)
+                    ],
+                    id="tabs-container",
+                    cls="gap-0.5 overflow-x-auto",
+                ),
+                render_add_block_dropdown(),
+                cls="gap-2",
             ),
-            id="working-area",
-            cls="border-2 border-dashed",
-        )
+            Div(),
+        ),
+        DividerSplit(cls="my-2"),
+        cls="mb-6",
     )
 
+
+def render_column_header(block_id, table_type, column_index, value=""):
+    block = next(b for b in blocks if b.id == block_id)
+    used_columns = block.get_used_column_names(table_type)
+    available_columns = (
+        sorted(list(block.get_used_column_names())) if table_type == "inputs" else []
+    )
+    is_new = not value
     return Div(
-        H3("Pipeline", cls="text-lg font-semibold mb-4"),
-        workspace,
-        Div(
+        DivLAligned(
+            Input(
+                type="text",
+                value=value,
+                placeholder="Enter name or delete",
+                name=f"col_{table_type}_{column_index}",
+                autofocus=is_new,
+                cls="w-full",
+                **{
+                    "data-block-id": block_id,
+                    "data-table-type": table_type,
+                    "data-column-index": column_index,
+                    "data-original-value": value,
+                    "data-is-new": str(is_new).lower(),
+                    "data-available-columns": json.dumps(available_columns),
+                    "data-used-columns": json.dumps(list(used_columns)),
+                    "onfocus": (
+                        "window.showColumnSuggestions(this)"
+                        if table_type == "inputs"
+                        else ""
+                    ),
+                    "onblur": "window.validateAndSaveColumn(this)",
+                    "oninput": (
+                        "window.filterColumnSuggestions(this)"
+                        if table_type == "inputs"
+                        else "window.checkColumnName(this)"
+                    ),
+                },
+            ),
             Button(
-                DivLAligned(UkIcon("trash-2", height=16), " Clear All"),
-                hx_post="/clear",
+                UkIcon("x", height=14),
+                cls=(ButtonT.ghost, "text-destructive"),
+                hx_delete=f"/block/{block_id}/delete-column/{table_type}/{column_index}",
                 hx_target="#main-container",
                 hx_swap="outerHTML",
-                hx_confirm="Remove all blocks and clear all training data?",
-                cls=ButtonT.destructive + " rounded",
             ),
-            cls="mt-4",
+            cls="gap-1",
         ),
-        cls="flex-1",
-    )
-
-
-def render_block(block):
-    display_text = block.signature if block.signature else "Right click to configure"
-    return Div(
-        Div(
+        (
             Div(
-                Span(block.label, cls="font-medium"),
-                Span(block.id, cls="text-xs text-muted-foreground ml-2"),
-                cls="flex items-center gap-2",
-            ),
-            Button(
-                UkIcon("trash-2", height=14),
-                hx_post=f"/rm/{block.id}",
-                hx_target="#main-container",
-                hx_swap="outerHTML",
-                cls=ButtonT.ghost + " p-1 rounded",
-            ),
-            cls="flex justify-between items-center",
+                cls="column-suggestions hidden absolute z-50 mt-1 w-full bg-card border rounded shadow-lg max-h-48 overflow-y-auto overflow-x-auto"
+            )
+            if table_type == "inputs"
+            else ""
         ),
-        Div(
-            Span(display_text, cls="text-muted-foreground"),
-            cls="mt-2 pt-1",
-        ),
-        id=block.id,
-        draggable="true",
-        cls="workspace-block p-3 border bg-card cursor-move",
-        data_type=block.type,
-        data_signature=block.signature,
-        data_params=json.dumps(block.params),
+        Div(cls="column-error hidden text-xs text-destructive mt-1"),
+        cls="relative w-full",
     )
 
 
-def render_context_menu(block_id, block_type, current_signature, current_params):
-    schema = DSPY_MODULE_SCHEMAS.get(block_type.lower(), {})
+def render_table_header(block, table_type):
+    columns = block.get_columns(table_type)
+    header_cells = [Th("#", cls="w-12")]
+    for i, col in enumerate(columns):
+        header_cells.append(
+            Th(render_column_header(block.id, table_type, i, col), cls="min-w-[150px]")
+        )
+    header_cells.append(
+        Th(
+            Button(
+                UkIcon("plus", height=14),
+                cls=ButtonT.ghost,
+                hx_post=f"/block/{block.id}/add-column/{table_type}",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
+                title="Add new column",
+            ),
+            cls="w-10",
+        )
+    )
+    return Tr(*header_cells, cls="bg-muted")
+
+
+def render_table_row(row, columns):
+    return Tr(
+        Td(str(row["id"]), cls=TextPresets.muted_sm),
+        *[
+            Td(
+                Input(
+                    type="text",
+                    value=row.get(col, ""),
+                    placeholder="Enter value",
+                    id=f"cell_{row['id']}_{col}",
+                    name=f"cell_{row['id']}_{col}",
+                    **{
+                        "data-row-id": row["id"],
+                        "data-col": col,
+                        "onchange": f"saveCell(this, {row['id']}, '{col}')",
+                    },
+                )
+            )
+            for col in columns
+        ],
+        Td(
+            Button(
+                UkIcon("x", height=14),
+                cls=(ButtonT.ghost, "text-destructive"),
+                hx_delete=f"/table/delete-row/{row['id']}",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
+            ),
+            cls="w-10",
+        ),
+    )
+
+
+def render_table(block, table_type):
+    columns = block.get_columns(table_type)
+    title = "Input Examples" if table_type == "inputs" else "Output Examples"
+    if not table.rows:
+        body_content = Tr(
+            Td(
+                "Click '+' to add data",
+                colspan=len(columns) + 2,
+                cls=(TextT.center, TextPresets.muted_sm, "py-8"),
+            )
+        )
+    else:
+        body_content = [render_table_row(row, columns) for row in table.rows]
+    return Card(
+        Div(
+            Table(
+                Thead(render_table_header(block, table_type)),
+                Tbody(
+                    *body_content if isinstance(body_content, list) else [body_content]
+                ),
+                cls="w-full",
+            ),
+            style="min-h-[300px] max-h-[400px] overflow-y-auto overflow-x-auto",
+        ),
+        header=DivFullySpaced(
+            H5(title),
+            Button(
+                UkIcon("rotate-ccw", height=14),
+                cls=ButtonT.ghost,
+                hx_post=f"/block/{block.id}/reset-columns/{table_type}",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
+                hx_confirm="Reset the table? All unique columns will be deleted.",
+            ),
+        ),
+        cls="w-1/2",
+    )
+
+
+def render_block_params(block):
+    schema = DSPY_MODULE_SCHEMAS.get(block.type, {})
     parameters = schema.get("parameters", {})
 
-    previous_signatures = []
-    current_index = next((i for i, b in enumerate(blocks) if b.id == block_id), -1)
-    if current_index > 0:
-        for b in blocks[:current_index]:
-            if b.signature:
-                previous_signatures.append(b.signature)
+    if not parameters:
+        return ""
 
-    signature_suggestions = []
-    for sig in previous_signatures:
-        escaped_sig = sig.replace("'", "\\'")
-        signature_suggestions.append(
-            Button(
-                sig,
-                cls="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded",
-                onclick=f"document.getElementById('signature-input').value = '{escaped_sig}';",
-            )
-        )
-
-    signature_tab = Div(
-        Div(
-            *signature_suggestions,
-            cls=(
-                "space-y-1 max-h-48 overflow-y-auto mb-3"
-                if signature_suggestions
-                else ""
-            ),
+    return Card(
+        Form(
+            *[
+                LabelInput(
+                    param_name.replace("_", " ").title(),
+                    id=f"param-{block.id}-{param_name}",
+                    value=block.params.get(param_name, ""),
+                    type="number" if param_config.get("type") == "int" else "text",
+                    placeholder=f"Enter {param_name}",
+                    **{"onchange": f"saveParam(this, '{block.id}', '{param_name}')"},
+                )
+                for param_name, param_config in parameters.items()
+            ],
         ),
-        Input(
-            id="signature-input",
-            value=current_signature,
-            placeholder="input: type -> output: type",
-            cls="w-full px-3 py-2 border text-sm",
-        ),
-        id="signature-tab",
+        header=H4("Module Parameters"),
+        cls="mt-6",
     )
 
-    param_fields = []
-    for param_name, param_config in parameters.items():
-        input_type = "number" if param_config.get("type") == "int" else "text"
-        current_value = current_params.get(param_name, "")
-        param_fields.append(
-            LabelInput(
-                param_name.title(),
-                id=f"param-{param_name}",
-                value=current_value,
-                type=input_type,
+
+def render_table_controls():
+    return DivFullySpaced(
+        Button(
+            UkIcon("plus", height=16),
+            cls=ButtonT.primary,
+            hx_post="/table/add-row",
+            hx_target="#main-container",
+            hx_swap="outerHTML",
+        ),
+        Button(
+            UkIcon("rotate-ccw", height=16),
+            cls=ButtonT.ghost,
+            hx_post="/table/clear",
+            hx_target="#main-container",
+            hx_swap="outerHTML",
+            hx_confirm="Reset the table? All rows will be cleared.",
+        ),
+        cls="mt-6 w-full",
+    )
+
+
+# ========= GLOBAL TABLE =========
+
+
+def render_global_table():
+    all_columns = sorted(list(table.columns))
+
+    if not table.rows:
+        body_content = Tr(
+            Td(
+                "Click '+' to add data",
+                colspan=len(all_columns) + 2,
+                cls=(TextT.center, TextPresets.muted_sm, "py-8"),
             )
         )
-
-    params_tab = Div(
-        Div(*param_fields, cls="space-y-3"),
-        id="params-tab",
-        cls="hidden",
-    )
+    else:
+        body_content = [render_global_table_row(row, all_columns) for row in table.rows]
 
     return Card(
         Div(
-            Div(
-                Button(
-                    "Signature",
-                    id="tab-signature-btn",
-                    cls=ButtonT.primary + " text-sm px-4 py-2 rounded",
+            Table(
+                Thead(render_global_table_header(all_columns)),
+                Tbody(
+                    *body_content if isinstance(body_content, list) else [body_content]
                 ),
-                Button(
-                    "Parameters",
-                    id="tab-params-btn",
-                    cls=ButtonT.secondary + " text-sm px-4 py-2 rounded",
-                ),
-                cls="flex gap-2 border-b pb-2 mb-4",
+                cls="w-full",
             ),
-            signature_tab,
-            params_tab,
-            Divider(cls="my-4"),
-            Button(
-                DivLAligned(UkIcon("save", height=16), " Save"),
-                cls=ButtonT.primary + " w-full rounded menu-save-btn",
-            ),
-            cls="p-4",
+            style="min-h-[600px] max-h-[800px] overflow-y-auto overflow-x-auto",
         ),
-        id=f"menu-{block_id}",
-        cls="fixed z-50 w-96 shadow-xl border bg-card",
-    )
-
-
-def render_table_section():
-    if not table.columns:
-        return Div(
-            Div(
-                H3("Examples", cls="table-main-title text-lg font-semibold"),
-                cls="mb-4",
-            ),
-            Div(
-                P(
-                    "Configure block signatures to create columns",
-                    cls="text-muted-foreground text-center py-10",
-                ),
-                cls="border-2 border-dashed",
-            ),
-            id="table-section",
-            cls="w-full",
-        )
-    table_rows = []
-    for row in table.rows:
-        cells = [
-            Td(
-                Span(row["id"], cls="inline-block w-full text-center"),
-                cls="px-3 py-2 font-mono text-sm w-16 text-center",
-            ),
-            *[
-                Td(
-                    Input(
-                        type="text",
-                        name=f"cell_{row['id']}_{col}",
-                        value=row.get(col, ""),
-                        cls="w-full px-2 py-1 border rounded text-sm",
-                    ),
-                    cls="px-2 py-1",
-                )
-                for col in table.columns
-            ],
-            Td(
-                Button(
-                    UkIcon("trash-2", height=14),
-                    cls=ButtonT.ghost + " p-1 text-destructive rounded",
-                    hx_post=f"/table/delete-row/{row['id']}",
-                    hx_target="#table-section",
-                    hx_swap="outerHTML",
-                ),
-                cls="text-center px-2 py-1 w-16",
-            ),
-        ]
-        table_rows.append(Tr(*cells))
-    return Div(
-        Div(
-            Div(
-                H3("Training Data", cls="table-main-title text-lg font-semibold"),
-                cls="mb-4",
-            ),
-            Div(
-                Table(
-                    Thead(
-                        Tr(
-                            Th(
-                                "#",
-                                cls="px-3 py-2 text-left text-sm font-medium border-b w-16",
-                            ),
-                            *[
-                                Th(
-                                    col,
-                                    cls="px-2 py-2 text-left text-sm font-medium border-b",
-                                )
-                                for col in table.columns
-                            ],
-                            Th(
-                                "",
-                                cls="px-2 py-2 text-center text-sm font-medium border-b w-16",
-                            ),
-                        ),
-                        cls="bg-muted",
-                    ),
-                    Tbody(*table_rows),
-                    cls="w-full border-collapse",
-                ),
-                cls="overflow-x-auto",
-            ),
-            Div(
-                Button(
-                    DivLAligned(UkIcon("plus", height=16), " Add Row"),
-                    cls=ButtonT.primary + " rounded",
-                    hx_post="/table/add-row",
-                    hx_target="#table-section",
-                    hx_swap="outerHTML",
-                ),
-                Button(
-                    DivLAligned(UkIcon("trash-2", height=16), " Clear All"),
-                    cls=ButtonT.destructive + " rounded",
-                    hx_post="/table/clear",
-                    hx_target="#table-section",
-                    hx_swap="outerHTML",
-                    hx_confirm="Clear all training data rows?",
-                ),
-                cls="flex justify-end gap-2 mt-4",
-            ),
-            cls="table-content",
-        ),
-        id="table-section",
+        header=H4("Training Examples"),
         cls="w-full",
     )
 
 
-def render_full_page():
-    return Container(
-        H1("DSPy Module Builder", cls="text-3xl font-bold text-center my-8"),
-        Div(
-            Div(
-                render_palette(),
-                render_workspace(),
-                cls="flex gap-6",
+def render_global_table_header(columns):
+    header_cells = [Th("#", cls="w-12")]
+    for col in columns:
+        header_cells.append(Th(col, cls="min-w-[150px]"))
+    header_cells.append(Th("", cls="w-10"))
+    return Tr(*header_cells, cls="bg-muted")
+
+
+def render_global_table_row(row, columns):
+    return Tr(
+        Td(str(row["id"]), cls=TextPresets.muted_sm),
+        *[
+            Td(
+                Input(
+                    type="text",
+                    value=row.get(col, ""),
+                    placeholder="Enter value",
+                    id=f"full_cell_{row['id']}_{col}",
+                    name=f"full_cell_{row['id']}_{col}",
+                    **{
+                        "data-row-id": row["id"],
+                        "data-col": col,
+                        "onchange": f"saveCell(this, {row['id']}, '{col}')",
+                    },
+                ),
+                cls="min-w-[150px]",
+            )
+            for col in columns
+        ],
+        Td(
+            Button(
+                UkIcon("x", height=14),
+                cls=(ButtonT.ghost, "text-destructive"),
+                hx_delete=f"/table/delete-row/{row['id']}",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
             ),
-            render_table_section(),
-            cls="space-y-6",
+            cls="w-10",
+        ),
+    )
+
+
+def render_global_table_controls():
+    return DivFullySpaced(
+        Div(),
+        DivLAligned(
+            Button(
+                UkIcon("plus", height=16),
+                cls=ButtonT.primary,
+                hx_post="/table/add-row",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
+            ),
+            Button(
+                UkIcon("rotate-ccw", height=16),
+                cls=ButtonT.ghost,
+                hx_post="/table/clear",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
+                hx_confirm="Reset the table? All rows will be cleared.",
+            ),
+            cls="gap-2",
+        ),
+        cls="mt-6 w-full",
+    )
+
+
+# ========= BASE RENDERS =========
+
+
+def render_empty_state():
+    return DivCentered(
+        Button(
+            DivLAligned(UkIcon("plus", height=16), "Add your first module"),
+            cls=ButtonT.primary,
+            **{"onclick": "toggleAddBlockMenu()"},
+        ),
+        Div(
+            *[
+                Button(
+                    MODULE_NAMES.get(block_type, block_type),
+                    cls=(ButtonT.default, "w-full justify-start"),
+                    hx_post=f"/add/{block_type}",
+                    hx_target="#main-container",
+                    hx_swap="outerHTML",
+                    **{"onclick": "toggleAddBlockMenu()"},
+                )
+                for block_type in BLOCK_TYPES
+            ],
+            id="add-block-menu",
+            cls="hidden absolute z-50 mt-1 w-56",
+        ),
+        cls="py-8",
+    )
+
+
+def render_view_toggle():
+    return Div(
+        DivLAligned(
+            Span("Tabs", cls=TextPresets.muted_sm),
+            Switch(
+                checked=view_mode == "global",
+                id="view-toggle",
+                name="view-toggle",
+                hx_post="/toggle-view",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
+                hx_trigger="change",
+            ),
+            Span("Global", cls=TextPresets.muted_sm),
+            cls="gap-2",
+        ),
+        cls="absolute right-4 top-5 z-40",
+    )
+
+
+def render_full_page():
+    active_block = (
+        next((b for b in blocks if b.id == active_block_id), None)
+        if active_block_id
+        else (blocks[0] if blocks else None)
+    )
+
+    return Container(
+        render_view_toggle(),
+        (
+            render_tabs_view(active_block)
+            if view_mode == "tabs"
+            else render_global_table_view()
         ),
         id="main-container",
+        cls=ContainerT.xl,
+    )
+
+
+def render_tabs_view(active_block):
+    return DivVStacked(
+        Div(render_tabs(), cls="w-full"),
+        (
+            DivLAligned(
+                render_table(active_block, "inputs") if active_block else "",
+                render_table(active_block, "outputs") if active_block else "",
+                cls="gap-6 w-full",
+            )
+            if active_block
+            else ""
+        ),
+        render_table_controls() if active_block else "",
+        render_block_params(active_block) if active_block else "",
+    )
+
+
+def render_global_table_view():
+    return DivVStacked(
+        render_global_table(),
+        render_global_table_controls(),
     )
 
 
@@ -446,60 +611,60 @@ def render_full_page():
 
 @rt("/")
 def get():
-    global blocks, init_predict
+    global blocks, init_predict, active_block_id
     if not blocks and not init_predict:
         init_predict = True
-        blocks.append(BlockData("predict", len(blocks)))
+        blocks.append(BlockData("predict", 0))
+        active_block_id = blocks[0].id
+        for _ in range(5):
+            table.add_row()
+        table.rows[0]["Question"] = "What is the capital of Great Britain?"
+        table.rows[0]["Answer"] = "London is the capital of Great Britain."
+
     return Container(
         Meta(name="server-start", content=str(int(time.time()))),
         Script(f"window.DSPY_MODULE_SCHEMAS = {json.dumps(DSPY_MODULE_SCHEMAS)};"),
         ToggleBtn(
             UkIcon("sun", cls="light-icon"),
             UkIcon("moon", cls="dark-icon"),
-            cls="theme-toggle-btn fixed top-4 right-4 z-50",
+            cls="fixed bottom-4 right-4 z-50",
             id="theme-toggle",
         ),
         render_full_page(),
     )
 
 
+@rt("/toggle-view", methods=["POST"])
+async def toggle_view(request):
+    global view_mode
+    form = await request.form()
+    is_checked = form.get("view-toggle") == "on"
+    view_mode = "global" if is_checked else "tabs"
+    return render_full_page()
+
+
+@rt("/select-tab/{block_id}")
+def select_tab(block_id: str):
+    global active_block_id
+    active_block_id = block_id
+    return render_full_page()
+
+
 @rt("/add/{btype}")
 def add_block(btype: str):
+    global active_block_id
     if btype not in BLOCK_TYPES:
         return render_full_page()
-    blocks.append(BlockData(btype, len(blocks)))
-    table.update_columns_from_blocks(blocks)
+
+    new_block = BlockData(btype, len(blocks))
+    blocks.append(new_block)
+    active_block_id = new_block.id
+    table.sync_columns_from_blocks(blocks)
     return render_full_page()
 
 
-@rt("/update-config/{bid}")
-def update_config(bid: str, signature: str = "", placeholder_param: str = None):
-    params = {}
-    if placeholder_param is not None:
-        params["placeholder_param"] = placeholder_param
-
-    for block in blocks:
-        if block.id == bid:
-            block.signature = signature
-            block.params = params
-            break
-
-    table.update_columns_from_blocks(blocks)
-    return render_full_page()
-
-
-@rt("/context-menu/{block_id}")
-def get_context_menu(block_id: str):
-    block = next((b for b in blocks if b.id == block_id), None)
-    if not block:
-        return ""
-    return Html(
-        render_context_menu(block_id, block.type, block.signature, block.params)
-    )
-
-
-@rt("/reorder")
-def reorder(order: str):
+@rt("/reorder-tabs")
+def reorder_tabs(order: str):
     global blocks
     try:
         new_order = json.loads(order)
@@ -511,62 +676,140 @@ def reorder(order: str):
                 b.position = i
     except Exception:
         pass
-    table.update_columns_from_blocks(blocks)
-    return render_full_page()
-
-
-@rt("/clear")
-def clear():
-    global blocks
-    blocks.clear()
-    table.update_columns_from_blocks(blocks)
     return render_full_page()
 
 
 @rt("/rm/{bid}")
 def delete_block(bid: str):
-    global blocks
+    global blocks, active_block_id
     blocks = [b for b in blocks if b.id != bid]
     for i, b in enumerate(blocks):
         b.position = i
-    table.update_columns_from_blocks(blocks)
+
+    if active_block_id == bid:
+        active_block_id = blocks[0].id if blocks else None
+
+    table.sync_columns_from_blocks(blocks)
     return render_full_page()
+
+
+@rt("/block/{block_id}/add-column/{table_type}")
+def add_column(block_id: str, table_type: str):
+    block = next((b for b in blocks if b.id == block_id), None)
+    if block is not None:
+        if table_type == "inputs":
+            block.input_columns.append("")
+        else:
+            block.output_columns.append("")
+        table.sync_columns_from_blocks(blocks)
+    return render_full_page()
+
+
+@rt("/block/{block_id}/delete-column/{table_type}/{col_index}", methods=["DELETE"])
+def delete_column(block_id: str, table_type: str, col_index: int):
+    block = next((b for b in blocks if b.id == block_id), None)
+    if block is not None:
+        columns = (
+            block.input_columns if table_type == "inputs" else block.output_columns
+        )
+        if len(columns) > 1:
+            block.delete_column(table_type, col_index)
+            table.sync_columns_from_blocks(blocks)
+    return render_full_page()
+
+
+@rt("/block/{block_id}/reset-columns/{table_type}")
+def reset_columns(block_id: str, table_type: str):
+    block = next((b for b in blocks if b.id == block_id), None)
+    if block is not None:
+        if table_type == "inputs":
+            block.input_columns = block.get_default_input_columns(block.position)
+        else:
+            block.output_columns = block.get_default_output_columns(block.position)
+        table.sync_columns_from_blocks(blocks)
+    return render_full_page()
+
+
+@rt("/save-column", methods=["POST"])
+async def save_column(request):
+    form = await request.form()
+    block_id = form.get("block_id", "")
+    table_type = form.get("table_type", "")
+    col_index = int(form.get("col_index", 0))
+    value = form.get("value", "").strip()
+    original_value = form.get("original_value", "")
+    is_new = form.get("is_new", "false").lower() == "true"
+
+    block = next((b for b in blocks if b.id == block_id), None)
+    if not block:
+        return ""
+
+    columns = block.input_columns if table_type == "inputs" else block.output_columns
+    if col_index >= len(columns):
+        return ""
+
+    if not value:
+        if is_new and len(columns) > 1:
+            del columns[col_index]
+            table.sync_columns_from_blocks(blocks)
+            return render_full_page()
+        columns[col_index] = original_value
+        return ""
+
+    if table_type == "outputs":
+        used_columns = block.get_used_column_names("outputs") - {original_value}
+        if value in used_columns:
+            columns[col_index] = original_value
+            return ""
+
+    columns[col_index] = value
+    table.sync_columns_from_blocks(blocks)
+    return ""
 
 
 @rt("/table/add-row")
 def add_table_row():
     table.add_row()
-    return render_table_section()
+    return render_full_page()
 
 
-@rt("/table/delete-row/{row_id}")
+@rt("/table/delete-row/{row_id}", methods=["DELETE"])
 def delete_table_row(row_id: int):
     table.delete_row(row_id)
-    return render_table_section()
-
-
-@rt("/table/restore", methods=["POST"])
-async def restore_table_data(request):
-    global table
-    try:
-        if request.headers.get("content-type", "").startswith("application/json"):
-            data = await request.json()
-        else:
-            form = await request.form()
-            data_str = form.get("data")
-            data = json.loads(data_str) if data_str else None
-        if data:
-            table.restore(data)
-        return render_table_section()
-    except Exception as e:
-        print(f"Error restoring table: {e}")
-        return "Error", 500
+    return render_full_page()
 
 
 @rt("/table/clear", methods=["POST"])
 def clear_table():
     table.clear_rows()
-    return render_table_section()
+    for _ in range(5):
+        table.add_row()
+    return render_full_page()
+
+
+@rt("/save-cell", methods=["POST"])
+async def save_cell(request):
+    form = await request.form()
+    row_id = int(form.get("row_id", 0))
+    col_name = form.get("col_name", "")
+    value = form.get("value", "")
+
+    table.update_cell(row_id, col_name, value)
+    return ""
+
+
+@rt("/save-param", methods=["POST"])
+async def save_param(request):
+    form = await request.form()
+    block_id = form.get("block_id", "")
+    param_name = form.get("param_name", "")
+    value = form.get("value", "")
+
+    block = next((b for b in blocks if b.id == block_id), None)
+    if block:
+        block.params[param_name] = value
+
+    return ""
 
 
 HOST = os.getenv("HOST", "0.0.0.0")

@@ -1,450 +1,261 @@
-const DSPY_MODULE_SCHEMAS = window.DSPY_MODULE_SCHEMAS || {};
-const BLOCK_TYPES = new Set(Object.keys(DSPY_MODULE_SCHEMAS));
-
-(function () {
-  const serverStart = document.querySelector(
-    'meta[name="server-start"]',
-  )?.content;
-  const lastServerStart = localStorage.getItem("last_server_start");
-
-  if (serverStart && lastServerStart !== serverStart) {
-    const keysToClear = ["dspy_blocks_data", "dspy_table_data"];
-    keysToClear.forEach((key) => localStorage.removeItem(key));
-    localStorage.setItem("last_server_start", serverStart);
-    console.log("Server restart detected - localStorage cleared");
-  }
-})();
-
-const Storage = {
-  _get(key) {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : null;
-  },
-  _set(key, data) {
-    localStorage.setItem(key, JSON.stringify(data));
-  },
-  _remove(key) {
-    localStorage.removeItem(key);
-  },
-
-  saveBlocks(data) {
-    this._set("dspy_blocks_data", data);
-  },
-  loadBlocks() {
-    return (
-      this._get("dspy_blocks_data") || { order: [], signatures: {}, params: {} }
-    );
-  },
-  clearBlocks() {
-    this._remove("dspy_blocks_data");
-  },
-
-  saveTable(data) {
-    this._set("dspy_table_data", data);
-  },
-  loadTableData() {
-    return this._get("dspy_table_data") || { columns: [], rows: [] };
-  },
-  clearTable() {
-    this._remove("dspy_table_data");
-  },
-};
-
-const UI = {
-  restoreBlocks() {
-    const data = Storage.loadBlocks();
-    const blocks = document.querySelectorAll(".workspace-block");
-    blocks.forEach((block) => {
-      const signature = data.signatures[block.id];
-      const params = data.params[block.id];
-      if (signature) {
-        block.setAttribute("data-signature", signature);
-        const signatureSpan = block.querySelector(".font-mono");
-        if (signatureSpan) signatureSpan.textContent = signature;
-      }
-      if (params) {
-        block.setAttribute("data-params", JSON.stringify(params));
-      }
+function handleAutoFocus() {
+  document
+    .querySelectorAll('.column-name-input[data-auto-focus="true"]')
+    .forEach((input) => {
+      setTimeout(() => {
+        input.focus();
+        input.select();
+        if (input.dataset.tableType === "inputs") showColumnSuggestions(input);
+        delete input.dataset.autoFocus;
+      }, 10);
     });
-  },
+}
 
-  updateBlockConfig(blockId, signature, params) {
-    const data = Storage.loadBlocks();
-    if (signature) {
-      data.signatures[blockId] = signature;
-    } else {
-      delete data.signatures[blockId];
-    }
-    if (params && Object.keys(params).length > 0) {
-      data.params[blockId] = params;
-    } else {
-      delete data.params[blockId];
-    }
-    Storage.saveBlocks(data);
-
-    const block = document.getElementById(blockId);
-    if (block) {
-      block.setAttribute("data-signature", signature);
-      block.setAttribute("data-params", JSON.stringify(params));
-      const signatureSpan = block.querySelector(".font-mono");
-      if (signatureSpan)
-        signatureSpan.textContent = signature || "Click to configure";
-    }
-  },
-
-  saveBlocksState() {
-    const blocks = document.querySelectorAll(".workspace-block");
-    const order = Array.from(blocks).map((b) => b.id);
-    const signatures = {};
-    const params = {};
-
-    blocks.forEach((block) => {
-      const signatureAttr = block.getAttribute("data-signature");
-      const paramsAttr = block.getAttribute("data-params");
-      if (signatureAttr) {
-        signatures[block.id] = signatureAttr;
-      }
-      if (paramsAttr) {
-        try {
-          params[block.id] = JSON.parse(paramsAttr);
-        } catch (e) {}
-      }
-    });
-
-    Storage.saveBlocks({ order, signatures, params });
-  },
-
-  saveTableState() {
-    const tableState = this.captureTableState();
-    if (tableState && tableState.rows.length > 0) {
-      Storage.saveTable(tableState);
-    }
-    htmx
-      .ajax("POST", "/table/restore", {
-        values: { data: JSON.stringify(tableState) },
-        swap: "none",
-      })
-      .catch((err) => console.error("Error saving table state:", err));
-  },
-
-  captureTableState() {
-    const cells = document.querySelectorAll('input[name^="cell_"]');
-    if (cells.length === 0) return null;
-
-    const tableState = { columns: [], rows: [] };
-
-    const headers = document.querySelectorAll("#table-section th");
-    headers.forEach((th, idx) => {
-      if (idx > 0 && idx < headers.length - 1) {
-        tableState.columns.push(th.textContent.trim());
-      }
-    });
-
-    const rowsMap = new Map();
-    cells.forEach((cell) => {
-      const match = cell.name.match(/^cell_(\d+)_(.+)$/);
-      if (match) {
-        const [, rowId, colName] = match;
-        const rowIdNum = parseInt(rowId);
-        if (!rowsMap.has(rowIdNum)) {
-          rowsMap.set(rowIdNum, { id: rowIdNum });
-        }
-        rowsMap.get(rowIdNum)[colName] = cell.value;
-      }
-    });
-
-    tableState.rows = Array.from(rowsMap.values());
-    return tableState;
-  },
-
-  restoreTableValues() {
-    const data = Storage.loadTableData();
-    if (!data || !data.rows) return;
-
-    data.rows.forEach((row) => {
-      Object.keys(row).forEach((col) => {
-        if (col !== "id") {
-          const input = document.querySelector(
-            `input[name="cell_${row.id}_${col}"]`,
-          );
-          if (input) {
-            input.value = row[col];
-          }
-        }
-      });
-    });
-  },
-
-  clearTable() {
-    Storage.clearTable();
-    htmx.ajax("POST", "/table/clear", {
-      target: "#table-section",
-      swap: "outerHTML",
-    });
-  },
-};
-
-// ==================== THEME ====================
-function initTheme() {
-  const savedTheme = localStorage.getItem("dspy_theme");
-  if (savedTheme === "dark") {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
+// =================== ADD BLOCK ===================
+function toggleAddBlockMenu() {
+  const menu = document.getElementById("add-block-menu");
+  if (menu) {
+    menu.classList.toggle("hidden");
   }
 }
 
-function setupThemeToggle() {
-  const btn = document.getElementById("theme-toggle");
-  if (btn && !btn._hasListener) {
-    btn.onclick = function () {
-      if (document.documentElement.classList.contains("dark")) {
-        document.documentElement.classList.remove("dark");
-        localStorage.setItem("dspy_theme", "light");
-      } else {
-        document.documentElement.classList.add("dark");
-        localStorage.setItem("dspy_theme", "dark");
-      }
-    };
-    btn._hasListener = true;
-  }
-}
-
-initTheme();
-setupThemeToggle();
-
-document.body.addEventListener("htmx:afterSwap", () => {
-  setupThemeToggle();
-});
-
-// ==================== CONTEXT MENU ====================
-let currentMenu = null;
-
-function closeMenu() {
-  currentMenu?.remove();
-  currentMenu = null;
-}
-
-window.showContextMenu = async (event, blockId) => {
-  event.preventDefault();
-  closeMenu();
-
-  try {
-    const res = await fetch(`/context-menu/${blockId}`);
-    const html = await res.text();
-    if (!html?.length) return;
-
-    const div = document.createElement("div");
-    div.innerHTML = html;
-    const menu = div.firstElementChild;
-    if (!menu) return;
-
-    Object.assign(menu.style, {
-      position: "fixed",
-      left: `${Math.min(event.clientX + 10, window.innerWidth - 320)}px`,
-      top: `${Math.min(event.clientY + 10, window.innerHeight - 400)}px`,
-      zIndex: "100000",
-    });
-
-    document.body.appendChild(menu);
-    currentMenu = menu;
-
-    const signatureTab = document.getElementById("signature-tab");
-    const paramsTab = document.getElementById("params-tab");
-    const sigBtn = document.getElementById("tab-signature-btn");
-    const paramsBtn = document.getElementById("tab-params-btn");
-
-    if (sigBtn && paramsBtn) {
-      sigBtn.onclick = () => {
-        sigBtn.className =
-          "bg-primary text-primary-foreground hover:bg-primary/90 text-sm px-4 py-2 rounded";
-        paramsBtn.className =
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm px-4 py-2 rounded";
-        signatureTab.classList.remove("hidden");
-        paramsTab.classList.add("hidden");
-      };
-      paramsBtn.onclick = () => {
-        paramsBtn.className =
-          "bg-primary text-primary-foreground hover:bg-primary/90 text-sm px-4 py-2 rounded";
-        sigBtn.className =
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm px-4 py-2 rounded";
-        paramsTab.classList.remove("hidden");
-        signatureTab.classList.add("hidden");
-      };
-    }
-
-    menu
-      .querySelector(".menu-save-btn")
-      ?.addEventListener("click", async (e) => {
-        e.preventDefault();
-        const signature =
-          document.getElementById("signature-input")?.value || "";
-        const params = {};
-        menu
-          .querySelectorAll(
-            "#params-tab input, #params-tab select, #params-tab textarea",
-          )
-          .forEach((input) => {
-            if (input.id) {
-              const paramName = input.id.replace("param-", "");
-              params[paramName] = input.value;
-            }
-          });
-
-        UI.updateBlockConfig(blockId, signature, params);
-
-        const formData = new FormData();
-        formData.append("signature", signature);
-        Object.keys(params).forEach((key) => {
-          formData.append(key, params[key]);
-        });
-
-        await htmx.ajax("POST", `/update-config/${blockId}`, {
-          values: Object.fromEntries(formData),
-          target: "#main-container",
-          swap: "outerHTML",
-        });
-
-        closeMenu();
-      });
-  } catch (err) {
-    console.error("Context menu error:", err);
-  }
-};
-
-document.body.addEventListener("contextmenu", (e) => {
-  const block = e.target.closest(".workspace-block");
-  if (block) {
-    e.preventDefault();
-    window.showContextMenu(e, block.id);
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("add-block-menu");
+  const btn = e.target.closest('[onclick="toggleAddBlockMenu()"]');
+  if (menu && !menu.contains(e.target) && !btn) {
+    menu.classList.add("hidden");
   }
 });
 
-document.body.addEventListener("click", (e) => {
-  if (currentMenu && !currentMenu.contains(e.target)) closeMenu();
-});
+// ================= TABS =================
+let tabsSortable = null;
 
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && currentMenu) closeMenu();
-});
+function initTabsSortable() {
+  const container = document.getElementById("tabs-container");
+  if (!container) return;
+  if (tabsSortable) tabsSortable.destroy();
 
-// ==================== DRAG & DROP ====================
-document.addEventListener("dragstart", (e) => {
-  const item = e.target.closest('[draggable="true"]');
-  if (item && item.dataset.blockType) {
-    e.dataTransfer.setData("text/plain", item.dataset.blockType);
-    e.dataTransfer.effectAllowed = "copy";
-  }
-});
-
-document.addEventListener("dragover", (e) => e.preventDefault());
-
-let isDropping = false;
-document.addEventListener("drop", (e) => {
-  const zone = e.target.closest("#working-area");
-  if (!zone) return;
-  e.preventDefault();
-  if (isDropping) return;
-
-  const type = e.dataTransfer.getData("text/plain");
-  if (BLOCK_TYPES.has(type)) {
-    isDropping = true;
-    htmx
-      .ajax("POST", `/add/${type}`, {
-        target: "#main-container",
-        swap: "outerHTML",
-      })
-      .finally(() => {
-        isDropping = false;
-      });
-  }
-});
-
-function initSortable() {
-  const area = document.getElementById("working-area");
-  if (!area) return;
-  if (area._sortable) area._sortable.destroy();
-
-  area._sortable = new Sortable(area, {
+  tabsSortable = new Sortable(container, {
     animation: 200,
-    handle: ".workspace-block",
-    draggable: ".workspace-block",
+    handle: ".cursor-grab",
+    draggable: "[data-block-id]",
+    ghostClass: "opacity-50",
     onEnd: () => {
-      const order = Array.from(area.children).map((c) => c.id);
-      UI.saveBlocksState();
-      htmx.ajax("POST", "/reorder", {
+      const order = Array.from(
+        container.querySelectorAll("[data-block-id]"),
+      ).map((tab) => tab.dataset.blockId);
+      htmx.ajax("POST", "/reorder-tabs", {
         target: "#main-container",
-        values: { order: JSON.stringify(order) },
         swap: "outerHTML",
+        values: { order: JSON.stringify(order) },
       });
     },
   });
 }
 
-document.body.addEventListener("input", (e) => {
-  if (e.target.name && e.target.name.startsWith("cell_")) {
-    UI.saveTableState();
-  }
-});
+// ================= COLUMN SUGGESTIONS =================
+function getSuggestionsDiv(input) {
+  return input.closest(".relative")?.querySelector(".column-suggestions");
+}
 
-document.body.addEventListener("htmx:afterSwap", (evt) => {
-  if (evt.detail.target?.id === "table-section") {
-    setTimeout(() => {
-      UI.restoreTableValues();
-    }, 50);
-  }
-  if (evt.detail.target?.id === "main-container") {
-    setTimeout(() => {
-      UI.restoreBlocks();
-      initSortable();
-      UI.restoreTableValues();
-    }, 50);
-  }
-});
-
-function initialize() {
-  initSortable();
-
-  const blocksData = Storage.loadBlocks();
-  if (
-    blocksData.order &&
-    blocksData.order.length > 0 &&
-    !window.initialBlockLoadDone
-  ) {
-    window.initialBlockLoadDone = true;
-    htmx
-      .ajax("POST", "/reorder", {
-        target: "#main-container",
-        values: { order: JSON.stringify(blocksData.order) },
-        swap: "outerHTML",
-      })
-      .then(() => {
-        setTimeout(() => UI.restoreBlocks(), 100);
-      });
-  } else {
-    UI.restoreBlocks();
-  }
-
-  const tableData = Storage.loadTableData();
-  if (tableData && tableData.rows.length > 0 && !window.initialTableLoadDone) {
-    window.initialTableLoadDone = true;
-    htmx
-      .ajax("POST", "/table/restore", {
-        target: "#table-section",
-        swap: "outerHTML",
-        values: { data: JSON.stringify(tableData) },
-      })
-      .then(() => {
-        setTimeout(() => UI.restoreTableValues(), 100);
-      });
-  } else {
-    UI.restoreTableValues();
+function parseJsonData(input, key) {
+  try {
+    return JSON.parse(input.dataset[key] || "[]");
+  } catch {
+    return [];
   }
 }
 
-window.addEventListener("beforeunload", () => {
-  UI.saveTableState();
-  UI.saveBlocksState();
+function renderSuggestions(suggestionsDiv, columns, input) {
+  suggestionsDiv.innerHTML = "";
+  columns.forEach((col) => {
+    const option = document.createElement("div");
+    option.className = "px-3 py-2 text-sm hover:bg-muted cursor-pointer";
+    option.textContent = col;
+    option.onmousedown = (e) => {
+      e.preventDefault();
+      input.value = col;
+      validateAndSaveColumn(input);
+      hideColumnSuggestions(input);
+    };
+    suggestionsDiv.appendChild(option);
+  });
+  suggestionsDiv.classList.remove("hidden");
+}
+
+function showColumnSuggestions(input) {
+  if (input.dataset.tableType !== "inputs") return;
+  const available = parseJsonData(input, "availableColumns");
+  if (!available.length) return;
+
+  const suggestionsDiv = getSuggestionsDiv(input);
+  if (!suggestionsDiv) return;
+
+  const filtered = available.filter((col) =>
+    col.toLowerCase().includes(input.value.toLowerCase()),
+  );
+  filtered.length
+    ? renderSuggestions(suggestionsDiv, filtered, input)
+    : suggestionsDiv.classList.add("hidden");
+}
+
+function filterColumnSuggestions(input) {
+  if (input.dataset.tableType !== "inputs") return;
+  const available = parseJsonData(input, "availableColumns");
+  const suggestionsDiv = getSuggestionsDiv(input);
+  if (!suggestionsDiv) return;
+
+  const filtered = available.filter((col) =>
+    col.toLowerCase().includes(input.value.toLowerCase()),
+  );
+  filtered.length
+    ? renderSuggestions(suggestionsDiv, filtered, input)
+    : suggestionsDiv.classList.add("hidden");
+}
+
+function hideColumnSuggestions(input) {
+  setTimeout(() => getSuggestionsDiv(input)?.classList.add("hidden"), 200);
+}
+
+// ==================== COLUMN VALIDATION ====================
+function getErrorDiv(input) {
+  return input.closest(".relative")?.querySelector(".column-error");
+}
+
+function checkColumnName(input) {
+  const value = input.value.trim();
+  if (input.dataset.tableType !== "outputs") return;
+
+  const usedColumns = parseJsonData(input, "usedColumns");
+  const originalValue = input.dataset.originalValue || "";
+  const errorDiv = getErrorDiv(input);
+  if (!errorDiv) return;
+
+  const columnsToCheck = usedColumns.filter((col) => col !== originalValue);
+  if (value && columnsToCheck.includes(value)) {
+    input.classList.add("border-destructive");
+    errorDiv.textContent = `"${value}" already exists in this or previous tab(s)`;
+    errorDiv.classList.remove("hidden");
+  } else {
+    input.classList.remove("border-destructive");
+    errorDiv.classList.add("hidden");
+  }
+}
+
+function validateAndSaveColumn(input) {
+  const value = input.value.trim();
+  const {
+    tableType,
+    originalValue,
+    isNew,
+    blockId,
+    columnIndex: colIndex,
+  } = input.dataset;
+  const usedColumns = parseJsonData(input, "usedColumns");
+
+  hideColumnSuggestions(input);
+  const errorDiv = getErrorDiv(input);
+
+  if (tableType === "outputs") {
+    const columnsToCheck = usedColumns.filter((col) => col !== originalValue);
+    if (value && columnsToCheck.includes(value)) {
+      input.value = originalValue;
+      input.classList.add("border-destructive");
+      if (errorDiv) {
+        errorDiv.textContent = `Column name "${value}" already exists`;
+        errorDiv.classList.remove("hidden");
+        setTimeout(() => errorDiv.classList.add("hidden"), 3000);
+      }
+      return;
+    }
+  }
+
+  if (!value && isNew === "true") {
+    htmx.ajax(
+      "DELETE",
+      `/block/${blockId}/delete-column/${tableType}/${colIndex}`,
+      { target: "#main-container", swap: "outerHTML" },
+    );
+    return;
+  }
+
+  if (!value && isNew !== "true") {
+    input.value = originalValue;
+    return;
+  }
+
+  if (errorDiv) errorDiv.classList.add("hidden");
+  input.classList.remove("border-destructive");
+
+  htmx.ajax("POST", "/save-column", {
+    swap: "none",
+    values: {
+      block_id: blockId,
+      table_type: tableType,
+      col_index: colIndex,
+      value,
+      original_value: originalValue,
+      is_new: isNew,
+    },
+  });
+}
+
+// =================== SAVE ===================
+function saveCell(input, rowId, colName) {
+  htmx.ajax("POST", "/save-cell", {
+    swap: "none",
+    values: { row_id: rowId, col_name: colName, value: input.value },
+  });
+}
+
+function saveParam(input, blockId, paramName) {
+  htmx.ajax("POST", "/save-param", {
+    swap: "none",
+    values: { block_id: blockId, param_name: paramName, value: input.value },
+  });
+}
+
+// =================== THEME ===================
+function initTheme() {
+  const theme = localStorage.getItem("dspy_theme");
+  document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
+function setupThemeToggle() {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn || btn._hasListener) return;
+  btn.onclick = () => {
+    const isDark = document.documentElement.classList.toggle("dark");
+    localStorage.setItem("dspy_theme", isDark ? "dark" : "light");
+  };
+  btn._hasListener = true;
+}
+
+// =================== INIT ===================
+initTheme();
+setupThemeToggle();
+
+document.body.addEventListener("htmx:afterSwap", (evt) => {
+  setupThemeToggle();
+  handleAutoFocus();
+  if (evt.detail.target?.id === "main-container")
+    setTimeout(initTabsSortable, 50);
 });
 
-initialize();
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    initTabsSortable();
+    handleAutoFocus();
+  }, 100);
+});
+
+Object.assign(window, {
+  checkColumnName,
+  showColumnSuggestions,
+  hideColumnSuggestions,
+  filterColumnSuggestions,
+  validateAndSaveColumn,
+  saveCell,
+  saveParam,
+  toggleAddBlockMenu,
+});
