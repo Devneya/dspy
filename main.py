@@ -74,7 +74,7 @@ class BlockData:
 
 class TableData:
     def __init__(self):
-        self.columns = {"Question", "Answer"}
+        self.columns = {"Input", "Output"}
         self.rows = []
         self.next_id = 1
 
@@ -84,7 +84,7 @@ class TableData:
             for b in blocks
             for c in (*b.input_columns, *b.output_columns)
             if c and c.strip()
-        } or {"Question", "Answer"}
+        } or {"Input", "Output"}
 
         if self.columns != new_cols:
             for row in self.rows:
@@ -129,13 +129,9 @@ blocks = []
 block_id = 1
 active_block_id = None
 table = TableData()
-view_mode = "tabs"
 
 
 # ==================== RENDER FUNCTIONS ====================
-
-
-# ========= TABS TABLE =========
 
 
 def render_tab_item(block):
@@ -151,6 +147,7 @@ def render_tab_item(block):
             hx_target="#main-container",
             hx_swap="outerHTML",
             **{"onclick": "event.stopPropagation()"},
+            title="Delete module",
         ),
         cls=f"px-4 py-2 cursor-pointer border-b-2 {active_cls} gap-2",
         id=f"tab-{block.id}",
@@ -169,6 +166,7 @@ def render_add_block_dropdown():
             UkIcon("plus", height=16),
             cls=ButtonT.primary,
             **{"onclick": "toggleAddBlockMenu()"},
+            title="Add new module",
         ),
         Div(
             *[
@@ -226,10 +224,11 @@ def render_column_header(block_id, table_type, column_index, value=""):
             Input(
                 type="text",
                 value=value,
-                placeholder="Enter name or delete",
+                placeholder="Column name",
                 name=f"col_{table_type}_{column_index}",
                 autofocus=is_new,
-                cls="w-full",
+                cls="border-0 outline-0 ring-0 bg-transparent font-medium text-sm px-3 py-2 m-0 rounded-none block flex-1",
+                style="box-shadow: none;",
                 **{
                     "data-block-id": block_id,
                     "data-table-type": table_type,
@@ -253,12 +252,13 @@ def render_column_header(block_id, table_type, column_index, value=""):
             ),
             Button(
                 UkIcon("x", height=14),
-                cls=(ButtonT.ghost, "text-destructive"),
+                cls=(ButtonT.ghost, "text-destructive p-0.5"),
                 hx_delete=f"/block/{block_id}/delete-column/{table_type}/{column_index}",
                 hx_target="#main-container",
                 hx_swap="outerHTML",
+                title="Delete column",
             ),
-            cls="gap-1",
+            cls="gap-1 items-center border border-border focus-within:border-primary focus-within:ring-1 focus-within:ring-primary",
         ),
         (
             Div(
@@ -274,31 +274,54 @@ def render_column_header(block_id, table_type, column_index, value=""):
 
 def render_table_header(block, table_type):
     columns = block.get_columns(table_type)
-    header_cells = [Th("#", cls="w-12")]
+    header_cells = []
+    if table_type == "inputs":
+        header_cells.append(
+            Th(
+                "",
+                cls="w-12 text-center border border-border bg-muted",
+                style="padding: 0; margin: 0;",
+            )
+        )
     for i, col in enumerate(columns):
         header_cells.append(
-            Th(render_column_header(block.id, table_type, i, col), cls="min-w-[150px]")
+            Th(
+                render_column_header(block.id, table_type, i, col),
+                cls="border border-border bg-muted",
+                style="padding: 0; margin: 0;",
+            )
         )
     header_cells.append(
         Th(
             Button(
                 UkIcon("plus", height=14),
-                cls=ButtonT.ghost,
+                cls=ButtonT.primary,
                 hx_post=f"/block/{block.id}/add-column/{table_type}",
                 hx_target="#main-container",
                 hx_swap="outerHTML",
                 title="Add new column",
             ),
-            cls="w-10",
+            cls="w-10 border border-border bg-muted",
+            style="padding: 0; margin: 0;",
         )
     )
-    return Tr(*header_cells, cls="bg-muted")
+    return Tr(*header_cells, style="padding: 0; margin: 0;")
 
 
-def render_table_row(row, columns):
-    return Tr(
-        Td(str(row["id"]), cls=TextPresets.muted_sm),
-        *[
+def render_table_row(row, columns, table_type):
+    cells = []
+
+    if table_type == "inputs":
+        cells.append(
+            Td(
+                str(row["id"]),
+                cls="border border-border text-center text-muted-foreground text-sm w-12",
+                style="padding: 0; margin: 0;",
+            )
+        )
+
+    for col in columns:
+        cells.append(
             Td(
                 Input(
                     type="text",
@@ -311,210 +334,90 @@ def render_table_row(row, columns):
                         "data-col": col,
                         "onchange": f"saveCell(this, {row['id']}, '{col}')",
                     },
-                )
+                    cls="w-full border border-border outline-0 ring-0 bg-transparent px-3 py-2 m-0 focus:border-primary focus:ring-1 focus:ring-primary rounded-none block",
+                    style="box-shadow: none; -webkit-appearance: none; -moz-appearance: none; margin: 0;",
+                ),
+                style="padding: 0; margin: 0;",
             )
-            for col in columns
-        ],
-        Td(
-            Button(
-                UkIcon("x", height=14),
-                cls=(ButtonT.ghost, "text-destructive"),
-                hx_delete=f"/table/delete-row/{row['id']}",
-                hx_target="#main-container",
-                hx_swap="outerHTML",
-            ),
-            cls="w-10",
-        ),
-    )
+        )
+
+    if table_type == "outputs":
+        cells.append(
+            Td(
+                Button(
+                    UkIcon("x"),
+                    cls=(ButtonT.ghost, "text-destructive p-0"),
+                    hx_delete=f"/table/delete-row/{row['id']}",
+                    hx_target="#main-container",
+                    hx_swap="outerHTML",
+                    style="padding: 0; margin: 0;",
+                    title="Delete row",
+                ),
+                cls="border border-border text-center w-10",
+                style="padding: 0; margin: 0;",
+            )
+        )
+    return Tr(*cells, cls="hover:bg-muted/50", style="padding: 0; margin: 0;")
 
 
-def render_table(block, table_type):
+def render_table_inner(block, table_type):
     columns = block.get_columns(table_type)
-    title = "Input Examples" if table_type == "inputs" else "Output Examples"
     if not table.rows:
         body_content = Tr(
             Td(
                 "Click '+' to add data",
-                colspan=len(columns) + 2,
-                cls=(TextT.center, TextPresets.muted_sm, "py-8"),
+                colspan=len(columns) + (2 if table_type == "inputs" else 1),
+                cls=(TextT.center, TextPresets.muted_sm, "py-8 border border-border"),
             )
         )
     else:
-        body_content = [render_table_row(row, columns) for row in table.rows]
-    return Card(
-        Div(
-            Table(
-                Thead(render_table_header(block, table_type)),
-                Tbody(
-                    *body_content if isinstance(body_content, list) else [body_content]
-                ),
-                cls="w-full",
-            ),
-            style="min-h-[300px] max-h-[400px] overflow-y-auto overflow-x-auto",
-        ),
-        header=DivFullySpaced(
-            H5(title),
+        body_content = [
+            render_table_row(row, columns, table_type) for row in table.rows
+        ]
+        if table_type == "inputs":
+            body_content.append(
+                Tr(
+                    Td(
+                        Button(
+                            UkIcon("plus", height=16),
+                            cls=ButtonT.primary,
+                            hx_post="/table/add-row",
+                            hx_target="#main-container",
+                            hx_swap="outerHTML",
+                            title="Add new row",
+                        ),
+                        style="padding: 0; margin: 0;",
+                    ),
+                    style="padding: 0; margin: 0;",
+                )
+            )
+    return Table(
+        Thead(render_table_header(block, table_type)),
+        Tbody(*body_content if isinstance(body_content, list) else [body_content]),
+        cls="w-full",
+        style="border-collapse: collapse; border-spacing: 0;",
+    )
+
+
+def render_table_with_header(block, table_type):
+    title = "Input Examples" if table_type == "inputs" else "Output Examples"
+    return DivVStacked(
+        DivFullySpaced(
+            H5(title, cls="mb-0"),
             Button(
                 UkIcon("rotate-ccw", height=14),
                 cls=ButtonT.ghost,
                 hx_post=f"/block/{block.id}/reset-columns/{table_type}",
                 hx_target="#main-container",
                 hx_swap="outerHTML",
-                hx_confirm="Reset the table? All unique columns will be deleted.",
+                hx_confirm=f"Reset {title.lower()}?",
+                title=f"Reset {title.lower()}",
             ),
+            cls="mb-0",
         ),
-        cls="w-1/2",
+        render_table_inner(block, table_type),
+        cls="flex-1 self-start",
     )
-
-
-def render_block_params(block):
-    schema = DSPY_MODULE_SCHEMAS.get(block.type, {})
-    parameters = schema.get("parameters", {})
-
-    if not parameters:
-        return ""
-
-    return Card(
-        Form(
-            *[
-                LabelInput(
-                    param_name.replace("_", " ").title(),
-                    id=f"param-{block.id}-{param_name}",
-                    value=block.params.get(param_name, ""),
-                    type="number" if param_config.get("type") == "int" else "text",
-                    placeholder=f"Enter {param_name}",
-                    **{"onchange": f"saveParam(this, '{block.id}', '{param_name}')"},
-                )
-                for param_name, param_config in parameters.items()
-            ],
-        ),
-        header=H4("Module Parameters"),
-        cls="mt-6",
-    )
-
-
-def render_table_controls():
-    return DivFullySpaced(
-        Button(
-            UkIcon("plus", height=16),
-            cls=ButtonT.primary,
-            hx_post="/table/add-row",
-            hx_target="#main-container",
-            hx_swap="outerHTML",
-        ),
-        Button(
-            UkIcon("rotate-ccw", height=16),
-            cls=ButtonT.ghost,
-            hx_post="/table/clear",
-            hx_target="#main-container",
-            hx_swap="outerHTML",
-            hx_confirm="Reset the table? All rows will be cleared.",
-        ),
-        cls="mt-6 w-full",
-    )
-
-
-# ========= GLOBAL TABLE =========
-
-
-def render_global_table():
-    all_columns = sorted(list(table.columns))
-
-    if not table.rows:
-        body_content = Tr(
-            Td(
-                "Click '+' to add data",
-                colspan=len(all_columns) + 2,
-                cls=(TextT.center, TextPresets.muted_sm, "py-8"),
-            )
-        )
-    else:
-        body_content = [render_global_table_row(row, all_columns) for row in table.rows]
-
-    return Card(
-        Div(
-            Table(
-                Thead(render_global_table_header(all_columns)),
-                Tbody(
-                    *body_content if isinstance(body_content, list) else [body_content]
-                ),
-                cls="w-full",
-            ),
-            style="min-h-[600px] max-h-[800px] overflow-y-auto overflow-x-auto",
-        ),
-        header=H4("Training Examples"),
-        cls="w-full",
-    )
-
-
-def render_global_table_header(columns):
-    header_cells = [Th("#", cls="w-12")]
-    for col in columns:
-        header_cells.append(Th(col, cls="min-w-[150px]"))
-    header_cells.append(Th("", cls="w-10"))
-    return Tr(*header_cells, cls="bg-muted")
-
-
-def render_global_table_row(row, columns):
-    return Tr(
-        Td(str(row["id"]), cls=TextPresets.muted_sm),
-        *[
-            Td(
-                Input(
-                    type="text",
-                    value=row.get(col, ""),
-                    placeholder="Enter value",
-                    id=f"full_cell_{row['id']}_{col}",
-                    name=f"full_cell_{row['id']}_{col}",
-                    **{
-                        "data-row-id": row["id"],
-                        "data-col": col,
-                        "onchange": f"saveCell(this, {row['id']}, '{col}')",
-                    },
-                ),
-                cls="min-w-[150px]",
-            )
-            for col in columns
-        ],
-        Td(
-            Button(
-                UkIcon("x", height=14),
-                cls=(ButtonT.ghost, "text-destructive"),
-                hx_delete=f"/table/delete-row/{row['id']}",
-                hx_target="#main-container",
-                hx_swap="outerHTML",
-            ),
-            cls="w-10",
-        ),
-    )
-
-
-def render_global_table_controls():
-    return DivFullySpaced(
-        Div(),
-        DivLAligned(
-            Button(
-                UkIcon("plus", height=16),
-                cls=ButtonT.primary,
-                hx_post="/table/add-row",
-                hx_target="#main-container",
-                hx_swap="outerHTML",
-            ),
-            Button(
-                UkIcon("rotate-ccw", height=16),
-                cls=ButtonT.ghost,
-                hx_post="/table/clear",
-                hx_target="#main-container",
-                hx_swap="outerHTML",
-                hx_confirm="Reset the table? All rows will be cleared.",
-            ),
-            cls="gap-2",
-        ),
-        cls="mt-6 w-full",
-    )
-
-
-# ========= BASE RENDERS =========
 
 
 def render_empty_state():
@@ -543,40 +446,14 @@ def render_empty_state():
     )
 
 
-def render_view_toggle():
-    return Div(
-        DivLAligned(
-            Span("Tabs", cls=TextPresets.muted_sm),
-            Switch(
-                checked=view_mode == "global",
-                id="view-toggle",
-                name="view-toggle",
-                hx_post="/toggle-view",
-                hx_target="#main-container",
-                hx_swap="outerHTML",
-                hx_trigger="change",
-            ),
-            Span("Global", cls=TextPresets.muted_sm),
-            cls="gap-2",
-        ),
-        cls="absolute right-4 top-5 z-40",
-    )
-
-
 def render_full_page():
     active_block = (
         next((b for b in blocks if b.id == active_block_id), None)
         if active_block_id
         else (blocks[0] if blocks else None)
     )
-
     return Container(
-        render_view_toggle(),
-        (
-            render_tabs_view(active_block)
-            if view_mode == "tabs"
-            else render_global_table_view()
-        ),
+        render_tabs_view(active_block),
         id="main-container",
         cls=ContainerT.xl,
     )
@@ -586,23 +463,24 @@ def render_tabs_view(active_block):
     return DivVStacked(
         Div(render_tabs(), cls="w-full"),
         (
-            DivLAligned(
-                render_table(active_block, "inputs") if active_block else "",
-                render_table(active_block, "outputs") if active_block else "",
-                cls="gap-6 w-full",
-            )
-            if active_block
-            else ""
+            (
+                DivLAligned(
+                    (
+                        render_table_with_header(active_block, "inputs")
+                        if active_block
+                        else ""
+                    ),
+                    (
+                        render_table_with_header(active_block, "outputs")
+                        if active_block
+                        else ""
+                    ),
+                    cls="w-full",
+                )
+                if active_block
+                else ""
+            ),
         ),
-        render_table_controls() if active_block else "",
-        render_block_params(active_block) if active_block else "",
-    )
-
-
-def render_global_table_view():
-    return DivVStacked(
-        render_global_table(),
-        render_global_table_controls(),
     )
 
 
@@ -632,15 +510,6 @@ def get():
         ),
         render_full_page(),
     )
-
-
-@rt("/toggle-view", methods=["POST"])
-async def toggle_view(request):
-    global view_mode
-    form = await request.form()
-    is_checked = form.get("view-toggle") == "on"
-    view_mode = "global" if is_checked else "tabs"
-    return render_full_page()
 
 
 @rt("/select-tab/{block_id}")
@@ -776,14 +645,6 @@ def add_table_row():
 @rt("/table/delete-row/{row_id}", methods=["DELETE"])
 def delete_table_row(row_id: int):
     table.delete_row(row_id)
-    return render_full_page()
-
-
-@rt("/table/clear", methods=["POST"])
-def clear_table():
-    table.clear_rows()
-    for _ in range(5):
-        table.add_row()
     return render_full_page()
 
 
