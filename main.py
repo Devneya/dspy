@@ -136,20 +136,27 @@ table = TableData()
 
 def render_tab_item(block):
     is_active = active_block_id == block.id
-    active_cls = "border-primary text-primary" if is_active else "border-transparent"
-    return DivLAligned(
-        UkIcon("grip-vertical", height=14, cls="cursor-grab text-muted-foreground"),
-        Span(block.label),
-        Button(
-            UkIcon("x", height=12),
-            cls=(ButtonT.ghost, "text-destructive p-0.5"),
-            hx_post=f"/rm/{block.id}",
-            hx_target="#main-container",
-            hx_swap="outerHTML",
-            **{"onclick": "event.stopPropagation()"},
-            title="Delete module",
+    active_cls = "border-primary" if is_active else "hover:bg-muted/50"
+    return Div(
+        DivLAligned(
+            UkIcon(
+                "grip-vertical",
+                height=14,
+                cls="cursor-grab text-muted-foreground flex-shrink-0",
+            ),
+            Span(block.label),
+            Button(
+                UkIcon("x", height=12),
+                cls=(ButtonT.link, "text-destructive p-0.5 flex-shrink-0 shadow-none"),
+                hx_post=f"/rm/{block.id}",
+                hx_target="#main-container",
+                hx_swap="outerHTML",
+                **{"onclick": "event.stopPropagation()"},
+                title="Delete module",
+            ),
+            cls="gap-2",
         ),
-        cls=f"px-4 py-2 cursor-pointer border-b-2 {active_cls} gap-2",
+        cls=f"px-4 py-2 cursor-pointer rounded-lg border-2 {active_cls} transition-colors",
         id=f"tab-{block.id}",
         **{
             "data-block-id": block.id,
@@ -187,28 +194,42 @@ def render_add_block_dropdown():
     )
 
 
+def render_flow_connector():
+    return Div(
+        Div(cls="hidden sm:flex items-center px-1")(
+            UkIcon("arrow-right", height=18, cls="text-muted-foreground/50"),
+        ),
+        Div(cls="sm:hidden flex justify-center py-1")(
+            UkIcon("arrow-down", height=18, cls="text-muted-foreground/50"),
+        ),
+        cls="flex-shrink-0",
+    )
+
+
 def render_tabs():
     if not blocks:
         return render_empty_state()
-
+    sorted_blocks = sorted(blocks, key=lambda x: x.position)
     return DivVStacked(
         DivFullySpaced(
             DivLAligned(
                 DivLAligned(
                     *[
-                        render_tab_item(block)
-                        for block in sorted(blocks, key=lambda x: x.position)
+                        item
+                        for i, block in enumerate(sorted_blocks)
+                        for item in (
+                            [render_tab_item(block)]
+                            if i == len(sorted_blocks) - 1
+                            else [render_tab_item(block), render_flow_connector()]
+                        )
                     ],
                     id="tabs-container",
-                    cls="gap-0.5 overflow-x-auto",
+                    cls="gap-0.5 overflow-x-auto items-center flex-wrap",
                 ),
                 render_add_block_dropdown(),
                 cls="gap-2",
             ),
-            Div(),
         ),
-        DividerSplit(cls="my-2"),
-        cls="mb-6",
     )
 
 
@@ -238,11 +259,11 @@ def render_column_header(block_id, table_type, column_index, value=""):
                     "data-available-columns": json.dumps(available_columns),
                     "data-used-columns": json.dumps(list(used_columns)),
                     "onfocus": (
-                        "window.showColumnSuggestions(this)"
+                        "window.showColumnSuggestions(this); this.parentElement.classList.add('border-primary', 'ring-1', 'ring-primary')"
                         if table_type == "inputs"
-                        else ""
+                        else "this.parentElement.classList.add('border-primary', 'ring-1', 'ring-primary')"
                     ),
-                    "onblur": "window.validateAndSaveColumn(this)",
+                    "onblur": "window.validateAndSaveColumn(this); this.parentElement.classList.remove('border-primary', 'ring-1', 'ring-primary')",
                     "oninput": (
                         "window.filterColumnSuggestions(this)"
                         if table_type == "inputs"
@@ -252,13 +273,13 @@ def render_column_header(block_id, table_type, column_index, value=""):
             ),
             Button(
                 UkIcon("x", height=14),
-                cls=(ButtonT.ghost, "text-destructive p-0.5"),
+                cls=(ButtonT.link, "text-destructive p-0.5 shadow-none"),
                 hx_delete=f"/block/{block_id}/delete-column/{table_type}/{column_index}",
                 hx_target="#main-container",
                 hx_swap="outerHTML",
                 title="Delete column",
             ),
-            cls="gap-1 items-center border border-border focus-within:border-primary focus-within:ring-1 focus-within:ring-primary",
+            cls="gap-1 items-center border border-border",
         ),
         (
             Div(
@@ -287,7 +308,7 @@ def render_table_header(block, table_type):
         header_cells.append(
             Th(
                 render_column_header(block.id, table_type, i, col),
-                cls="border border-border bg-muted",
+                cls="bg-muted",
                 style="padding: 0; margin: 0;",
             )
         )
@@ -316,7 +337,7 @@ def render_table_row(row, columns, table_type):
             Td(
                 str(row["id"]),
                 cls="border border-border text-center text-muted-foreground text-sm w-12",
-                style="padding: 0; margin: 0;",
+                style="padding: 0; margin: 0; height: 41px;",
             )
         )
 
@@ -334,10 +355,11 @@ def render_table_row(row, columns, table_type):
                         "data-col": col,
                         "onchange": f"saveCell(this, {row['id']}, '{col}')",
                     },
-                    cls="w-full border border-border outline-0 ring-0 bg-transparent px-3 py-2 m-0 focus:border-primary focus:ring-1 focus:ring-primary rounded-none block",
+                    cls="w-full border-2 border-transparent outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full focus:border-primary focus:ring-1 focus:ring-primary",
                     style="box-shadow: none; -webkit-appearance: none; -moz-appearance: none; margin: 0;",
                 ),
-                style="padding: 0; margin: 0;",
+                cls="border border-border",
+                style="padding: 0; margin: 0; height: 41px;",
             )
         )
 
@@ -346,15 +368,14 @@ def render_table_row(row, columns, table_type):
             Td(
                 Button(
                     UkIcon("x"),
-                    cls=(ButtonT.ghost, "text-destructive p-0"),
+                    cls=(ButtonT.link, "text-destructive p-0 shadow-none"),
                     hx_delete=f"/table/delete-row/{row['id']}",
                     hx_target="#main-container",
                     hx_swap="outerHTML",
-                    style="padding: 0; margin: 0;",
                     title="Delete row",
                 ),
                 cls="border border-border text-center w-10",
-                style="padding: 0; margin: 0;",
+                style="padding: 0; margin: 0; height: 41px;",
             )
         )
     return Tr(*cells, cls="hover:bg-muted/50", style="padding: 0; margin: 0;")
@@ -362,35 +383,25 @@ def render_table_row(row, columns, table_type):
 
 def render_table_inner(block, table_type):
     columns = block.get_columns(table_type)
-    if not table.rows:
-        body_content = Tr(
-            Td(
-                "Click '+' to add data",
-                colspan=len(columns) + (2 if table_type == "inputs" else 1),
-                cls=(TextT.center, TextPresets.muted_sm, "py-8 border border-border"),
+    body_content = [render_table_row(row, columns, table_type) for row in table.rows]
+    if table_type == "inputs":
+        body_content.append(
+            Tr(
+                Td(
+                    Button(
+                        UkIcon("plus", height=16),
+                        cls=ButtonT.primary,
+                        hx_post="/table/add-row",
+                        hx_target="#main-container",
+                        hx_swap="outerHTML",
+                        title="Add new row",
+                    ),
+                    cls="border border-border",
+                    style="padding: 0; margin: 0; height: 41px;",
+                ),
+                style="padding: 0; margin: 0;",
             )
         )
-    else:
-        body_content = [
-            render_table_row(row, columns, table_type) for row in table.rows
-        ]
-        if table_type == "inputs":
-            body_content.append(
-                Tr(
-                    Td(
-                        Button(
-                            UkIcon("plus", height=16),
-                            cls=ButtonT.primary,
-                            hx_post="/table/add-row",
-                            hx_target="#main-container",
-                            hx_swap="outerHTML",
-                            title="Add new row",
-                        ),
-                        style="padding: 0; margin: 0;",
-                    ),
-                    style="padding: 0; margin: 0;",
-                )
-            )
     return Table(
         Thead(render_table_header(block, table_type)),
         Tbody(*body_content if isinstance(body_content, list) else [body_content]),
