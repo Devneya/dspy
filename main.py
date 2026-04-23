@@ -42,14 +42,14 @@ class BlockData:
 
     def get_default_input_columns(self, position):
         if position == 0:
-            return ["Question"]
+            return ["input"]
         prev_block = blocks[position - 1] if position > 0 else None
         if prev_block and prev_block.output_columns:
             return [prev_block.output_columns[0]]
-        return ["Input"]
+        return ["input"]
 
     def get_default_output_columns(self, position):
-        return ["Answer"] if position == 0 else [f"Output_{position+1}"]
+        return ["output"] if position == 0 else [f"output_{position+1}"]
 
     def get_columns(self, table_type):
         return self.input_columns if table_type == "inputs" else self.output_columns
@@ -74,7 +74,7 @@ class BlockData:
 
 class TableData:
     def __init__(self):
-        self.columns = {"Input", "Output"}
+        self.columns = {"input", "output"}
         self.rows = []
         self.next_id = 1
 
@@ -84,7 +84,7 @@ class TableData:
             for b in blocks
             for c in (*b.input_columns, *b.output_columns)
             if c and c.strip()
-        } or {"Input", "Output"}
+        } or {"input", "output"}
 
         if self.columns != new_cols:
             for row in self.rows:
@@ -413,19 +413,7 @@ def render_table_inner(block, table_type):
 def render_table_with_header(block, table_type):
     title = "Input Examples" if table_type == "inputs" else "Output Examples"
     return DivVStacked(
-        DivFullySpaced(
-            H5(title, cls="mb-0"),
-            Button(
-                UkIcon("rotate-ccw", height=14),
-                cls=ButtonT.ghost,
-                hx_post=f"/block/{block.id}/reset-columns/{table_type}",
-                hx_target="#main-container",
-                hx_swap="outerHTML",
-                hx_confirm=f"Reset {title.lower()}?",
-                title=f"Reset {title.lower()}",
-            ),
-            cls="mb-0",
-        ),
+        H5(title, cls="mb-3"),
         render_table_inner(block, table_type),
         cls="flex-1 self-start",
     )
@@ -433,25 +421,28 @@ def render_table_with_header(block, table_type):
 
 def render_empty_state():
     return DivCentered(
-        Button(
-            DivLAligned(UkIcon("plus", height=16), "Add your first module"),
-            cls=ButtonT.primary,
-            **{"onclick": "toggleAddBlockMenu()"},
-        ),
         Div(
-            *[
-                Button(
-                    MODULE_NAMES.get(block_type, block_type),
-                    cls=(ButtonT.default, "w-full justify-start"),
-                    hx_post=f"/add/{block_type}",
-                    hx_target="#main-container",
-                    hx_swap="outerHTML",
-                    **{"onclick": "toggleAddBlockMenu()"},
-                )
-                for block_type in BLOCK_TYPES
-            ],
-            id="add-block-menu",
-            cls="hidden absolute z-50 mt-1 w-56",
+            Button(
+                DivLAligned(UkIcon("plus", height=16)),
+                cls=ButtonT.primary,
+                **{"onclick": "toggleAddBlockMenu()"},
+            ),
+            Div(
+                *[
+                    Button(
+                        MODULE_NAMES.get(block_type, block_type),
+                        cls=(ButtonT.default, "w-full justify-start"),
+                        hx_post=f"/add/{block_type}",
+                        hx_target="#main-container",
+                        hx_swap="outerHTML",
+                        **{"onclick": "toggleAddBlockMenu()"},
+                    )
+                    for block_type in BLOCK_TYPES
+                ],
+                id="add-block-menu",
+                cls="hidden absolute left-0 z-50 mt-2 w-56",
+            ),
+            cls="relative",
         ),
         cls="py-8",
     )
@@ -505,10 +496,21 @@ def get():
         init_predict = True
         blocks.append(BlockData("predict", 0))
         active_block_id = blocks[0].id
-        for _ in range(5):
-            table.add_row()
-        table.rows[0]["Question"] = "What is the capital of Great Britain?"
-        table.rows[0]["Answer"] = "London is the capital of Great Britain."
+        blocks[0].input_columns = ["mood", "question"]
+        blocks[0].output_columns = ["answer"]
+        table.sync_columns_from_blocks(blocks)
+        table.add_row()
+        table.rows[0]["mood"] = "good"
+        table.rows[0]["question"] = "How are you doing?"
+        table.rows[0]["answer"] = "Great, thanks! And you?"
+        table.add_row()
+        table.rows[1]["mood"] = "neutral"
+        table.rows[1]["question"] = "What's up?"
+        table.rows[1]["answer"] = "Not much, what about you?"
+        table.add_row()
+        table.rows[2]["mood"] = "bad"
+        table.rows[2]["question"] = "How's it going?"
+        table.rows[2]["answer"] = "Horrible, that's how. You?"
 
     return Container(
         Meta(name="server-start", content=str(int(time.time()))),
@@ -516,7 +518,7 @@ def get():
         ToggleBtn(
             UkIcon("sun", cls="light-icon"),
             UkIcon("moon", cls="dark-icon"),
-            cls="fixed bottom-4 right-4 z-50",
+            cls="fixed bottom-4 right-4 z-50 shadow-none",
             id="theme-toggle",
         ),
         render_full_page(),
