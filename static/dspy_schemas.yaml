@@ -1,0 +1,59 @@
+predict:
+  name: Predict
+  description: ""
+  wrapper: 0
+
+chainofthought:
+  name: ChainOfThought
+  description: ""
+  wrapper: 0
+
+programofthought:
+  name: ProgramOfThought
+  description: ""
+  wrapper: 0
+
+multichaincomparison:
+  name: MultiChainComparison
+  description: ""
+  wrapper: 0
+
+refine:
+  name: Refine
+  description: ""
+  wrapper: 1
+  default_threshold: 0.5
+  reward_code: |
+    def reward_fn(inputs, prediction):
+        """
+        Reward function for Refine.
+        Args:
+            inputs: dict passed to the module
+            prediction: dspy.Prediction object (access fields with prediction.field_name)
+        Returns:
+            float, int, or bool (higher is better, >= threshold stops refining)
+        """
+        # Example: reward shorter answer field
+        answer = str(prediction.answer) if hasattr(prediction, 'answer') else str(prediction)
+        score = min(1 - len(answer) / 200, 1.0)
+        return score
+
+bestofn:
+  name: BestOfN
+  description: ""
+  wrapper: 1
+  default_threshold: 0.5
+  reward_code: |
+    def reward_fn(inputs, prediction):
+        """
+        Reward function for BestOfN.
+        Args:
+            inputs: dict passed to the module
+            prediction: dspy.Prediction object (access fields with prediction.field_name)
+        Returns:
+            float, int, or bool (higher is better, highest score wins)
+        """
+        # Example: award one-word answers
+        expected = inputs.get('answer', '')
+        predicted = str(prediction.answer) if hasattr(prediction, 'answer') else str(prediction)
+        return 1.0 if len(answer.split()) == 1 else 0.0
