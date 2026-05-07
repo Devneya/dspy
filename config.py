@@ -20,7 +20,4 @@ init_predict = False
 blocks = []
 block_id = 1
 active_block_id = None
-
-import sys
-
-print(f"config.py loaded, id(blocks) = {id(blocks)}", file=sys.stderr)
+is_optimized = False

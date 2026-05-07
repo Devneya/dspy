@@ -21,13 +21,35 @@ def render_full_page():
 
 
 def render_tabs_view(active_block):
-    tabs_row = Div(render_tabs(), cls="w-full")
+    tabs_row = DivFullySpaced(
+        render_tabs(),
+        Button(
+            Span("OPTIMIZE", cls="ml-1"),
+            cls=(ButtonT.primary, "text-sm flex-shrink-0"),
+            id="optimize-all-btn",
+            hx_post="/optimize",
+            hx_target="#optimize-status",
+            hx_swap="innerHTML",
+        ),
+        cls="w-full items-center",
+    )
+
     if not active_block:
-        return DivVStacked(tabs_row)
+        return DivVStacked(
+            tabs_row,
+            Div(id="optimize-status", cls="text-sm text-muted-foreground mt-1"),
+        )
+
     if isinstance(active_block, WrapperBlock):
-        return DivVStacked(tabs_row, render_wrapper_workspace(active_block))
+        return DivVStacked(
+            tabs_row,
+            Div(id="optimize-status", cls="text-sm text-muted-foreground mt-1"),
+            render_wrapper_workspace(active_block),
+        )
+
     return DivVStacked(
         tabs_row,
+        Div(id="optimize-status", cls="text-sm text-muted-foreground mt-1"),
         DivLAligned(
             render_table_with_header(active_block, "inputs"),
             render_table_with_header(active_block, "outputs"),

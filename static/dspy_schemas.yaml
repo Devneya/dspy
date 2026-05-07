@@ -56,4 +56,4 @@ bestofn:
         # Example: award one-word answers
         expected = inputs.get('answer', '')
         predicted = str(prediction.answer) if hasattr(prediction, 'answer') else str(prediction)
-        return 1.0 if len(answer.split()) == 1 else 0.0
+        return 1.0 if len(predicted.split()) == 1 else 0.0

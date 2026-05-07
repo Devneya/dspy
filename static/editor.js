@@ -34,11 +34,15 @@
         resolve();
         return;
       }
+
+      const MONACO_CDN =
+        "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs";
+
       require.config({
-        paths: {
-          vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs",
-        },
+        paths: { vs: MONACO_CDN },
+        baseUrl: MONACO_CDN,
       });
+
       require(["vs/editor/editor.main"], () => {
         _monacoReady = true;
         resolve();

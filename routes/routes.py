@@ -63,6 +63,18 @@ def get():
     )
 
 
+@rt("/optimize", methods=["POST"])
+async def optimize_all():
+    config.is_optimized = True
+    return Div(
+        DivLAligned(
+            UkIcon("check", height=14, cls="text-green-500"),
+            Span("Optimization complete", cls="text-sm text-green-500 ml-1"),
+            cls="items-center",
+        )
+    )
+
+
 @rt("/select-tab/{block_id}")
 def select_tab(block_id: str):
     config.active_block_id = block_id
