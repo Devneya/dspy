@@ -1,51 +1,5 @@
 import config
 
-# class BlockData:
-#     def __init__(self, block_type, position):
-#         self.id = f"b{config.block_id}"
-#         self.type = block_type
-#         self.position = position
-#         self.label = config.MODULE_NAMES.get(block_type, block_type)
-#         self.input_columns = self.get_default_input_columns(position)
-#         self.output_columns = self.get_default_output_columns(position)
-#         self.params = {}
-#         config.block_id += 1
-
-#     def get_default_input_columns(self, position):
-#         if position == 0:
-#             return ["input"]
-#         prev_block = config.blocks[position - 1] if position > 0 else None
-#         if prev_block and prev_block.output_columns:
-#             return [prev_block.output_columns[0]]
-#         return ["input"]
-
-#     def get_default_output_columns(self, position):
-#         return ["output"] if position == 0 else [f"output_{position+1}"]
-
-#     def get_columns(self, table_type):
-#         return self.input_columns if table_type == "inputs" else self.output_columns
-
-#     def get_used_column_names(self, table_type=None):
-#         used = set()
-#         for b in config.blocks:
-#             if b.position < self.position:
-#                 used.update([c for c in b.input_columns if c and c.strip()])
-#                 used.update([c for c in b.output_columns if c and c.strip()])
-#         if table_type == "outputs":
-#             used.update([c for c in self.input_columns if c and c.strip()])
-#             used.update([c for c in self.output_columns if c and c.strip()])
-#         return used
-
-#     def delete_column(self, table_type, col_index):
-#         columns = self.input_columns if table_type == "inputs" else self.output_columns
-#         if col_index < len(columns):
-#             return columns.pop(col_index)
-#         return None
-
-
-# def create_block(block_type, position):
-#     return BlockData(block_type, position)
-
 
 class BlockData:
     def __init__(self, block_type, position):
@@ -53,7 +7,6 @@ class BlockData:
         self.type = block_type
         self.position = position
         self.label = config.MODULE_NAMES.get(block_type, block_type)
-        self.params = {}
         config.block_id += 1
 
 

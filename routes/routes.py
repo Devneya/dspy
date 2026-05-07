@@ -16,7 +16,12 @@ app, rt = fast_app(
             src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js",
             defer=True,
         ),
+        Script(
+            src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js",
+            defer=True,
+        ),
         Script(src="/static/scripts.js", defer=True),
+        Script(src="/static/editor.js", defer=True),
     ],
 )
 
@@ -89,16 +94,18 @@ def reorder_tabs(order: str):
             return render_full_page()
         if isinstance(reordered[0], WrapperBlock):
             return render_full_page()
-        for i in range(len(reordered) - 1):
-            if isinstance(reordered[i], WrapperBlock) and isinstance(
-                reordered[i + 1], WrapperBlock
+        for i, b in enumerate(reordered):
+            if isinstance(b, WrapperBlock):
+                if i > 0 and not isinstance(reordered[i - 1], WrapperBlock):
+                    b.wrapped_block_id = reordered[i - 1].id
+        for i, b in enumerate(reordered):
+            if isinstance(b, WrapperBlock) and isinstance(
+                reordered[i - 1], WrapperBlock
             ):
                 return render_full_page()
         config.blocks[:] = reordered
         for i, b in enumerate(config.blocks):
             b.position = i
-            if isinstance(b, WrapperBlock):
-                b.wrapped_block_id = config.blocks[i - 1].id if i > 0 else None
     except Exception:
         pass
     return render_full_page()
@@ -205,13 +212,26 @@ async def save_cell(request):
     return ""
 
 
-@rt("/save-param", methods=["POST"])
-async def save_param(request):
+@rt("/save-reward-code", methods=["POST"])
+async def save_reward_code(request):
     form = await request.form()
     block_id = form.get("block_id", "")
-    param_name = form.get("param_name", "")
-    value = form.get("value", "")
+    code = form.get("code", "")
     block = next((b for b in config.blocks if b.id == block_id), None)
-    if block:
-        block.params[param_name] = value
+    if block and isinstance(block, WrapperBlock):
+        block.reward_code = code
+    return ""
+
+
+@rt("/save-threshold", methods=["POST"])
+async def save_threshold(request):
+    form = await request.form()
+    block_id = form.get("block_id", "")
+    threshold = form.get("threshold", "0.5")
+    block = next((b for b in config.blocks if b.id == block_id), None)
+    if block and isinstance(block, WrapperBlock):
+        try:
+            block.threshold = float(threshold)
+        except ValueError:
+            pass
     return ""
