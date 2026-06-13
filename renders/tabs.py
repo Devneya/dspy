@@ -115,6 +115,7 @@ def render_add_block_dropdown():
                     hx_post=f"/add/{block_type}",
                     hx_target="#main-container",
                     hx_swap="outerHTML",
+                    title=config.DSPY_MODULE_SCHEMAS.get(block_type, {}).get("description", ""),
                     **{"onclick": "toggleAddBlockMenu()"},
                 )
                 for block_type in available_types
@@ -200,7 +201,7 @@ def render_empty_state():
                         hx_swap="outerHTML",
                         **{"onclick": "toggleAddBlockMenu()"},
                     )
-                    for block_type in config.BLOCK_TYPES
+                    for block_type in config.BLOCK_TYPES if block_type not in config.WRAPPER_TYPES
                 ],
                 id="add-block-menu",
                 cls="hidden absolute left-0 z-50 mt-2 w-56",

@@ -1,26 +1,26 @@
 predict:
   name: Predict
-  description: ""
+  description: "Makes one prediction"
   wrapper: 0
 
 chainofthought:
   name: ChainOfThought
-  description: ""
+  description: "Shows reasoning steps"
   wrapper: 0
 
 programofthought:
   name: ProgramOfThought
-  description: ""
+  description: "Writes and runs code"
   wrapper: 0
 
 multichaincomparison:
   name: MultiChainComparison
-  description: ""
+  description: "Compares and selects the best answer"
   wrapper: 0
 
 refine:
   name: Refine
-  description: ""
+  description: "Improves answers iteratively"
   wrapper: 1
   default_threshold: 0.5
   reward_code: |
@@ -40,7 +40,7 @@ refine:
 
 bestofn:
   name: BestOfN
-  description: ""
+  description: "Picks the best of several tries"
   wrapper: 1
   default_threshold: 0.5
   reward_code: |
