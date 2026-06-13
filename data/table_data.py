@@ -55,3 +55,4 @@ class TableData:
 
 
 table = TableData()
+inference_table = TableData()

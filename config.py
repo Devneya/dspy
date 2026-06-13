@@ -21,3 +21,8 @@ blocks = []
 block_id = 1
 active_block_id = None
 is_optimized = False
+current_mode = "build"
+
+def mark_unoptimized():
+    global is_optimized
+    is_optimized = False

@@ -90,6 +90,16 @@ def render_tab_item(block, show_grip=False):
 
 
 def render_add_block_dropdown():
+    can_add_wrapper = len(config.blocks) > 0 and not isinstance(
+        config.blocks[-1], WrapperBlock
+    )
+
+    available_types = [
+        block_type
+        for block_type in config.BLOCK_TYPES
+        if block_type not in config.WRAPPER_TYPES or can_add_wrapper
+    ]
+
     return Div(
         Button(
             UkIcon("plus", height=16),
@@ -107,7 +117,7 @@ def render_add_block_dropdown():
                     hx_swap="outerHTML",
                     **{"onclick": "toggleAddBlockMenu()"},
                 )
-                for block_type in config.BLOCK_TYPES
+                for block_type in available_types
             ],
             id="add-block-menu",
             cls="hidden absolute right-0 z-50 mt-1 w-56",

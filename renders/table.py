@@ -152,7 +152,7 @@ def render_table_row(row, columns, table_type, readonly=False, block_id_score=No
                 Input(
                     type="text",
                     value=row.get(col, ""),
-                    placeholder="Enter value" if not readonly else "",
+                    placeholder=f"Enter {col}" if not readonly else "",
                     id=f"cell_{row['id']}_{col}",
                     name=f"cell_{row['id']}_{col}",
                     readonly=readonly,
@@ -207,9 +207,7 @@ def render_table_row(row, columns, table_type, readonly=False, block_id_score=No
     return Tr(*cells, cls="hover:bg-muted/50", style="padding: 0; margin: 0;")
 
 
-def render_table_inner(
-    block, table_type, readonly=False, block_id_score=None, carry_cls="", carry_style=""
-):
+def render_table_inner(block, table_type, readonly=False, block_id_score=None):
     columns = block.get_columns(table_type)
     body_content = [
         render_table_row(row, columns, table_type, readonly, block_id_score)

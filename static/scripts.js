@@ -215,6 +215,29 @@ function saveParam(input, blockId, paramName) {
   });
 }
 
+// =================== FILE UPLOAD ===================
+
+function uploadInferenceFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  fetch("/inference/upload", {
+    method: "POST",
+    body: formData,
+  })
+    .then((response) => response.text())
+    .then((html) => {
+      const target = document.querySelector(input.dataset.target);
+      if (target) target.outerHTML = html;
+    })
+    .catch((err) => console.error("Upload failed:", err));
+
+  input.value = "";
+}
+
 // =================== THEME ===================
 function initTheme() {
   const theme = localStorage.getItem("dspy_theme");
@@ -258,4 +281,5 @@ Object.assign(window, {
   saveCell,
   saveParam,
   toggleAddBlockMenu,
+  uploadInferenceFile,
 });

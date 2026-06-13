@@ -1,7 +1,8 @@
 from fasthtml.common import *
 from monsterui.all import *
 from data.block_data import create_block, RegularBlock, WrapperBlock
-from data.table_data import table
+from data.table_data import table, inference_table
+from renders.inference import get_top_level_inputs, render_inference_section
 from renders.page import render_full_page
 import config
 import json
@@ -66,13 +67,7 @@ def get():
 @rt("/optimize", methods=["POST"])
 async def optimize_all():
     config.is_optimized = True
-    return Div(
-        DivLAligned(
-            UkIcon("check", height=14, cls="text-green-500"),
-            Span("Optimization complete", cls="text-sm text-green-500 ml-1"),
-            cls="items-center",
-        )
-    )
+    return (render_inference_section(),)
 
 
 @rt("/select-tab/{block_id}")
@@ -93,6 +88,7 @@ def add_block(btype: str):
     config.blocks.append(new_block)
     config.active_block_id = new_block.id
     table.sync_columns_from_blocks(config.blocks)
+    config.mark_unoptimized()
     return render_full_page()
 
 
@@ -120,6 +116,7 @@ def reorder_tabs(order: str):
             b.position = i
     except Exception:
         pass
+    config.mark_unoptimized()
     return render_full_page()
 
 
@@ -141,6 +138,7 @@ def delete_block(bid: str):
     if config.active_block_id == bid:
         config.active_block_id = config.blocks[0].id if config.blocks else None
     table.sync_columns_from_blocks(config.blocks)
+    config.mark_unoptimized()
     return render_full_page()
 
 
@@ -153,6 +151,7 @@ def add_column(block_id: str, table_type: str):
         else:
             block.output_columns.append("")
         table.sync_columns_from_blocks(config.blocks)
+    config.mark_unoptimized()
     return render_full_page()
 
 
@@ -166,6 +165,7 @@ def delete_column(block_id: str, table_type: str, col_index: int):
         if len(columns) > 1:
             block.delete_column(table_type, col_index)
             table.sync_columns_from_blocks(config.blocks)
+    config.mark_unoptimized()
     return render_full_page()
 
 
@@ -199,18 +199,21 @@ async def save_column(request):
             return ""
     columns[col_index] = value
     table.sync_columns_from_blocks(config.blocks)
+    config.mark_unoptimized()
     return ""
 
 
 @rt("/table/add-row")
 def add_table_row():
     table.add_row()
+    config.mark_unoptimized()
     return render_full_page()
 
 
 @rt("/table/delete-row/{row_id}", methods=["DELETE"])
 def delete_table_row(row_id: int):
     table.delete_row(row_id)
+    config.mark_unoptimized()
     return render_full_page()
 
 
@@ -221,6 +224,7 @@ async def save_cell(request):
     col_name = form.get("col_name", "")
     value = form.get("value", "")
     table.update_cell(row_id, col_name, value)
+    config.mark_unoptimized()
     return ""
 
 
@@ -232,6 +236,7 @@ async def save_reward_code(request):
     block = next((b for b in config.blocks if b.id == block_id), None)
     if block and isinstance(block, WrapperBlock):
         block.reward_code = code
+    config.mark_unoptimized()
     return ""
 
 
@@ -246,4 +251,77 @@ async def save_threshold(request):
             block.threshold = float(threshold)
         except ValueError:
             pass
+    config.mark_unoptimized()
     return ""
+
+
+@rt("/switch-mode/{mode}")
+def switch_mode(mode: str):
+    if mode in ("build", "use"):
+        config.current_mode = mode
+    return render_full_page()
+
+
+@rt("/inference/add-row")
+def add_inference_row():
+    inference_table.add_row()
+    return render_inference_section()
+
+
+@rt("/inference/delete-row/{row_id}", methods=["DELETE"])
+def delete_inference_row(row_id: int):
+    inference_table.delete_row(row_id)
+    return render_inference_section()
+
+
+@rt("/save-inference-cell", methods=["POST"])
+async def save_inference_cell(request):
+    form = await request.form()
+    row_id = int(form.get("row_id", 0))
+    col_name = form.get("col_name", "")
+    for key, value in form.items():
+        if key not in ("row_id", "col_name"):
+            inference_table.update_cell(row_id, col_name, value)
+            break
+    return ""
+
+
+@rt("/inference/upload", methods=["POST"])
+async def upload_inference_file(request):
+    import csv
+    import io
+    import json as json_module
+
+    form = await request.form()
+    file = form.get("file")
+
+    if not file:
+        return render_inference_section()
+
+    content = await file.read()
+    filename = file.filename.lower()
+    top_inputs = sorted(get_top_level_inputs())
+
+    if filename.endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(content.decode()))
+        for row in reader:
+            inference_table.add_row()
+            for col in top_inputs:
+                if col in row:
+                    inference_table.rows[-1][col] = row[col]
+
+    elif filename.endswith(".json"):
+        data = json_module.loads(content)
+        rows = data if isinstance(data, list) else [data]
+        for item in rows:
+            inference_table.add_row()
+            for col in top_inputs:
+                if col in item:
+                    inference_table.rows[-1][col] = str(item[col])
+
+    return render_inference_section()
+
+
+@rt("/infer", methods=["POST"])
+async def run_inference(request):
+    return Div(P("placeholder"))
