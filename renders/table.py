@@ -156,15 +156,10 @@ def render_table_row(row, columns, table_type, readonly=False, block_id_score=No
                     id=f"cell_{row['id']}_{col}",
                     name=f"cell_{row['id']}_{col}",
                     readonly=readonly,
-                    **(
-                        {}
-                        if readonly
-                        else {
-                            "data-row-id": row["id"],
-                            "data-col": col,
-                            "onchange": f"saveCell(this, {row['id']}, '{col}')",
-                        }
-                    ),
+                    hx_post="/save-cell" if not readonly else None,
+                    hx_trigger="change delay:300ms" if not readonly else None,
+                    hx_vals=f'{{"row_id": "{row["id"]}", "col_name": "{col}"}}' if not readonly else None,
+                    hx_include="this",
                     cls=(
                         "w-full border-2 border-transparent outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full focus:border-primary focus:ring-1 focus:ring-primary"
                         if not readonly

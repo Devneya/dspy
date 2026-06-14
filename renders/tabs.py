@@ -199,6 +199,7 @@ def render_empty_state():
                         hx_post=f"/add/{block_type}",
                         hx_target="#main-container",
                         hx_swap="outerHTML",
+                        title=config.DSPY_MODULE_SCHEMAS.get(block_type, {}).get("description", ""),
                         **{"onclick": "toggleAddBlockMenu()"},
                     )
                     for block_type in config.BLOCK_TYPES if block_type not in config.WRAPPER_TYPES

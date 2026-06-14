@@ -200,7 +200,11 @@ async def save_column(request):
     columns[col_index] = value
     table.sync_columns_from_blocks(config.blocks)
     config.mark_unoptimized()
-    return ""
+    # fix later
+    return Response(
+        status_code=200,
+        headers={"HX-Refresh": "true"}
+    )
 
 
 @rt("/table/add-row")
@@ -222,9 +226,10 @@ async def save_cell(request):
     form = await request.form()
     row_id = int(form.get("row_id", 0))
     col_name = form.get("col_name", "")
-    value = form.get("value", "")
-    table.update_cell(row_id, col_name, value)
-    config.mark_unoptimized()
+    for key, value in form.items():
+        if key not in ("row_id", "col_name"):
+            table.update_cell(row_id, col_name, value)
+            break
     return ""
 
 
