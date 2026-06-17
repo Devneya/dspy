@@ -17,65 +17,24 @@ def get_top_level_inputs():
     return all_inputs - all_outputs
 
 
-def render_inference_section():
+def get_output_columns():
+    all_outputs = set()
+    for block in config.blocks:
+        if hasattr(block, "output_columns"):
+            all_outputs.update(block.output_columns)
+    return all_outputs
+
+
+def render_input_table():
     top_inputs = sorted(get_top_level_inputs())
 
-    if top_inputs:
-        inference_table.columns = set(top_inputs)
-        for row in inference_table.rows:
-            for col in top_inputs:
-                if col not in row:
-                    row[col] = ""
+    if not top_inputs:
+        return Div(P("No inputs needed", cls="text-sm text-muted-foreground"))
+
+    inference_table.columns = set(top_inputs)
 
     if not inference_table.rows:
         inference_table.add_row()
-
-    if not top_inputs:
-        return DivVStacked(
-            P("No inputs needed", cls="text-sm text-muted-foreground"),
-            DivLAligned(
-                Button(
-                    UkIcon("play", height=14),
-                    Span("Run", cls="ml-1"),
-                    cls=(ButtonT.primary, "text-sm"),
-                    id="run-inference-btn",
-                    hx_post="/infer",
-                    hx_target="#inference-results",
-                    hx_swap="innerHTML",
-                ),
-                Button(
-                    UkIcon("upload", height=14),
-                    Span("Load file", cls="ml-1"),
-                    cls=(ButtonT.default, "text-sm ml-2"),
-                    **{"onclick": """
-                        var input = document.getElementById('inference-file-input');
-                        input.onchange = function() { this.closest('form').requestSubmit(); };
-                        input.click();
-                    """},
-                ),
-                Span(
-                    "", id="inference-status", cls="text-xs text-muted-foreground ml-3"
-                ),
-                cls="items-center mt-4",
-            ),
-            Form(
-                Input(
-                    type="file",
-                    name="file",
-                    accept=".csv,.json",
-                    cls="hidden",
-                    id="inference-file-input",
-                ),
-                hx_post="/inference/upload",
-                hx_target="#inference-section",
-                hx_swap="outerHTML",
-                hx_encoding="multipart/form-data",
-                style="display:none;",
-            ),
-            Div(id="inference-results", cls="mt-4"),
-            cls="w-full",
-            id="inference-section",
-        )
 
     header_cells = [
         Th(
@@ -127,6 +86,7 @@ def render_inference_section():
                         hx_trigger="change",
                         hx_vals=f'{{"row_id": "{row["id"]}", "col_name": "{col}"}}',
                         hx_include="this",
+                        hx_swap="none",
                         cls="w-full border-2 border-transparent outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full focus:border-primary focus:ring-1 focus:ring-primary",
                         style="box-shadow: none; -webkit-appearance: none; -moz-appearance: none; margin: 0;",
                     ),
@@ -138,7 +98,7 @@ def render_inference_section():
             Td(
                 Button(
                     UkIcon("x"),
-                    cls=(ButtonT.link, "text-destructive p-0 shadow-none"),
+                    cls="text-destructive p-0 shadow-none",
                     hx_delete=f"/inference/delete-row/{row['id']}",
                     hx_target="#inference-section",
                     hx_swap="outerHTML",
@@ -171,52 +131,130 @@ def render_inference_section():
     )
 
     return DivVStacked(
+        H5("Inputs", cls="mb-3"),
         Table(
             Thead(Tr(*header_cells, style="padding: 0; margin: 0;")),
             Tbody(*body_rows),
             cls="w-full",
             style="border-collapse: collapse; border-spacing: 0;",
         ),
+        cls="flex-1 self-start",
+    )
+
+
+def render_output_table():
+    output_cols = sorted(get_output_columns())
+    result_cols = [
+        c
+        for c in sorted(inference_table.columns - {"id"})
+        if c not in get_top_level_inputs()
+    ]
+    all_outputs = output_cols + [c for c in result_cols if c not in output_cols]
+
+    if not all_outputs:
+        return DivVStacked(
+            H5("Outputs", cls="mb-3"),
+            P("Run inference to see results", cls="text-sm text-muted-foreground"),
+            cls="flex-1 self-start",
+        )
+
+    header_cells = []
+    for col in all_outputs:
+        header_cells.append(
+            Th(
+                Div(
+                    DivLAligned(
+                        Input(
+                            type="text",
+                            value=col,
+                            readonly=True,
+                            cls="border-0 outline-0 ring-0 bg-transparent font-medium text-sm px-3 py-2 m-0 rounded-none block flex-1 cursor-default",
+                            style="box-shadow: none;",
+                        ),
+                        cls="gap-1 items-center border border-border",
+                    ),
+                    cls="relative w-full",
+                ),
+                cls="bg-muted",
+                style="padding: 0; margin: 0;",
+            )
+        )
+
+    body_rows = []
+    for row in inference_table.rows:
+        cells = []
+        for col in all_outputs:
+            cells.append(
+                Td(
+                    Input(
+                        type="text",
+                        value=row.get(col, "—"),
+                        readonly=True,
+                        cls="w-full border-0 outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full cursor-default",
+                        style="box-shadow: none; margin: 0;",
+                    ),
+                    cls="border border-border",
+                    style="padding: 0; margin: 0; height: 41px;",
+                )
+            )
+        body_rows.append(
+            Tr(*cells, cls="hover:bg-muted/50", style="padding: 0; margin: 0;")
+        )
+
+    return DivVStacked(
+        H5("Outputs", cls="mb-3"),
+        Table(
+            Thead(Tr(*header_cells, style="padding: 0; margin: 0;")),
+            Tbody(*body_rows),
+            cls="w-full",
+            style="border-collapse: collapse; border-spacing: 0;",
+        ),
+        cls="flex-1 self-start",
+    )
+
+
+def render_inference_section():
+    return DivVStacked(
+        Div(
+            Div(render_input_table(), style="flex: 1;"),
+            Div(render_output_table(), style="flex: 1;"),
+            style="display: flex; gap: 0; width: 100%; margin-top: 16px;",
+        ),
         DivLAligned(
             Button(
                 UkIcon("play", height=14),
                 Span("Run", cls="ml-1"),
                 cls=(ButtonT.primary, "text-sm mt-4"),
-                id="run-inference-btn",
                 hx_post="/infer",
-                hx_target="#inference-results",
-                hx_swap="innerHTML",
+                hx_target="#inference-section",
+                hx_swap="outerHTML",
+                hx_include="[id^='infer_']",
             ),
             Button(
                 UkIcon("upload", height=14),
                 Span("Load file", cls="ml-1"),
                 cls=(ButtonT.default, "text-sm mt-4 ml-2"),
-                **{"onclick": """
-                    var input = document.getElementById('inference-file-input');
-                    input.onchange = function() { this.closest('form').requestSubmit(); };
-                    input.click();
-                """},
+                **{
+                    "onclick": "document.getElementById('inference-file-input').click()"
+                },
             ),
             Span(
                 "", id="inference-status", cls="text-xs text-muted-foreground ml-3 mt-4"
             ),
             cls="items-center",
         ),
-        Form(
-            Input(
-                type="file",
-                name="file",
-                accept=".csv,.json",
-                cls="hidden",
-                id="inference-file-input",
-            ),
+        Input(
+            type="file",
+            name="file",
+            accept=".csv,.json",
+            cls="hidden",
+            id="inference-file-input",
             hx_post="/inference/upload",
             hx_target="#inference-section",
             hx_swap="outerHTML",
             hx_encoding="multipart/form-data",
-            style="display:none;",
+            hx_trigger="change",
         ),
-        Div(id="inference-results", cls="mt-4"),
         cls="w-full",
         id="inference-section",
     )

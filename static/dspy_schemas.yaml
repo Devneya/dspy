@@ -23,6 +23,7 @@ refine:
   description: "Improves answers iteratively"
   wrapper: 1
   default_threshold: 0.5
+  default_N: 3
   reward_code: |
     def reward_fn(inputs, prediction):
         """
@@ -43,6 +44,7 @@ bestofn:
   description: "Picks the best of several tries"
   wrapper: 1
   default_threshold: 0.5
+  default_N: 3
   reward_code: |
     def reward_fn(inputs, prediction):
         """

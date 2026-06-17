@@ -73,8 +73,9 @@ def render_tabs_view(active_block):
 
 
 def render_use_view():
-    if not config.is_optimized:
-        return DivVStacked(
+    return DivVStacked(
+        Div(id="optimize-status", cls="text-sm text-muted-foreground mb-2"),
+        Div(
             Button(
                 Span("Optimize", cls="ml-1"),
                 cls=(ButtonT.primary, "text-sm"),
@@ -83,9 +84,12 @@ def render_use_view():
                 hx_target="#use-content",
                 hx_swap="innerHTML",
             ),
-            Div(id="use-content"),
-        )
-
-    return DivVStacked(
-        render_inference_section(),
+            cls="mb-4" if not config.is_optimized else "hidden",
+        ),
+        Div(
+            render_inference_section() if config.is_optimized else Div(),
+            id="use-content",
+            cls="w-full",
+        ),
+        cls="w-full",
     )

@@ -235,7 +235,7 @@ def render_table_inner(block, table_type, readonly=False, block_id_score=None):
 
 
 def render_table_with_header(block, table_type, readonly=False, block_id_score=None):
-    title = "Input Examples" if table_type == "inputs" else "Output Examples"
+    title = "Example Inputs" if table_type == "inputs" else "Example Outputs"
     return DivVStacked(
         H5(title, cls="mb-3"),
         render_table_inner(block, table_type, readonly, block_id_score),

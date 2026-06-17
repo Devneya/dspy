@@ -1,9 +1,10 @@
 from fasthtml.common import *
 from monsterui.all import *
+from core.core import get_program, optimize, run as core_run
 from data.block_data import create_block, RegularBlock, WrapperBlock
 from data.table_data import table, inference_table
 from renders.inference import get_top_level_inputs, render_inference_section
-from renders.page import render_full_page
+from renders.page import render_full_page, render_use_view
 import config
 import json
 import time
@@ -62,12 +63,6 @@ def get():
         ),
         render_full_page(),
     )
-
-
-@rt("/optimize", methods=["POST"])
-async def optimize_all():
-    config.is_optimized = True
-    return (render_inference_section(),)
 
 
 @rt("/select-tab/{block_id}")
@@ -201,10 +196,7 @@ async def save_column(request):
     table.sync_columns_from_blocks(config.blocks)
     config.mark_unoptimized()
     # fix later
-    return Response(
-        status_code=200,
-        headers={"HX-Refresh": "true"}
-    )
+    return Response(status_code=200, headers={"HX-Refresh": "true"})
 
 
 @rt("/table/add-row")
@@ -307,6 +299,9 @@ async def upload_inference_file(request):
     filename = file.filename.lower()
     top_inputs = sorted(get_top_level_inputs())
 
+    inference_table.columns = set(top_inputs)
+    inference_table.clear_rows()
+
     if filename.endswith(".csv"):
         reader = csv.DictReader(io.StringIO(content.decode()))
         for row in reader:
@@ -327,6 +322,46 @@ async def upload_inference_file(request):
     return render_inference_section()
 
 
+@rt("/optimize", methods=["POST"])
+async def optimize_all():
+    optimize()
+    config.is_optimized = True
+    return Div(render_inference_section(), cls="w-full")
+
+
 @rt("/infer", methods=["POST"])
 async def run_inference(request):
-    return Div(P("placeholder"))
+    program = get_program()
+    if not program:
+        return Div(P("Program not optimized yet.", cls="text-sm text-muted-foreground"))
+
+    form = await request.form()
+    print(f"Form keys: {list(form.keys())}", file=sys.stderr)
+
+    rows = {}
+    for key, value in form.items():
+        if key.startswith("infer_"):
+            parts = key.split("_", 2)
+            if len(parts) >= 3:
+                row_id = int(parts[1])
+                col = parts[2]
+                if row_id not in rows:
+                    rows[row_id] = {}
+                rows[row_id][col] = value
+
+    if not rows:
+        return Div(P("No inputs provided", cls="text-sm text-muted-foreground"))
+
+    for row_id, inputs in rows.items():
+        try:
+            result = core_run(program, **inputs)
+            for row in inference_table.rows:
+                if row["id"] == row_id:
+                    for key, value in result.items():
+                        if not key.startswith("_"):
+                            row[key] = str(value)
+                    break
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+
+    return render_inference_section()
