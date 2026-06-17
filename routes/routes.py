@@ -251,6 +251,20 @@ async def save_threshold(request):
     config.mark_unoptimized()
     return ""
 
+@rt("/save-repeat", methods=["POST"])
+async def save_repeat(request):
+    form = await request.form()
+    block_id = form.get("block_id", "")
+    repeat = form.get("repeat", "3")
+    block = next((b for b in config.blocks if b.id == block_id), None)
+    if block and isinstance(block, WrapperBlock):
+        try:
+            block.N = float(repeat)
+        except ValueError:
+            pass
+    config.mark_unoptimized()
+    return ""
+
 
 @rt("/switch-mode/{mode}")
 def switch_mode(mode: str):

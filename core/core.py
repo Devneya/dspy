@@ -147,15 +147,14 @@ def build_trainset(examples):
         inputs = {k: v for k, v in example_data.items() if k not in all_outputs}
         if inputs:
             trainset.append(dspy.Example(**example_data).with_inputs(*inputs.keys()))
+    print(f"Trainset size: {len(trainset)}", file=sys.stderr)
+    for t in trainset:
+        print(f"  Example: {t}", file=sys.stderr)
     return trainset
 
 
 def train(program, examples):
-    optimizer = dspy.BootstrapFewShot(
-        max_bootstrapped_demos=4,
-        max_labeled_demos=4,
-        max_rounds=1,
-    )
+    optimizer = dspy.BootstrapFewShot()
     optimized = optimizer.compile(program, trainset=build_trainset(examples))
     return optimized
 

@@ -29,21 +29,39 @@ def render_wrapper_workspace(block):
             style="display: flex; gap: 0; width: 100%; margin-top: 16px;",
         ),
         DivVStacked(
-            DivVStacked(
-                H5("Threshold", cls="mb-3 mt-6"),
-                Input(
-                    type="number",
-                    value=str(block.threshold),
-                    step="0.05",
-                    min="0",
-                    id=f"threshold-{block.id}",
-                    name="threshold",
-                    cls="w-32",
-                    hx_post="/save-threshold",
-                    hx_vals=f'{{"block_id": "{block.id}"}}',
-                    hx_trigger="change",
+            DivHStacked(
+                DivVStacked(
+                    H5("Threshold", cls="mb-3 mt-6"),
+                    Input(
+                        type="number",
+                        value=str(block.threshold),
+                        step="0.05",
+                        min="0",
+                        id=f"threshold-{block.id}",
+                        name="threshold",
+                        cls="w-32",
+                        hx_post="/save-threshold",
+                        hx_vals=f'{{"block_id": "{block.id}"}}',
+                        hx_trigger="change",
+                    ),
+                    cls="gap-0",
                 ),
-                cls="gap-0",
+                DivVStacked(
+                    H5("Repeat Count", cls="mb-3 mt-6"),
+                    Input(
+                        type="number",
+                        value=str(block.N),
+                        step="1",
+                        min="1",
+                        id=f"repeat-{block.id}",
+                        name="repeat",
+                        cls="w-32",
+                        hx_post="/save-repeat",
+                        hx_vals=f'{{"block_id": "{block.id}"}}',
+                        hx_trigger="change",
+                    ),
+                    cls="gap-0",
+                ),
             ),
             DivCentered(
                 DivLAligned(
