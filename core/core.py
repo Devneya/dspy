@@ -10,6 +10,13 @@ program = None
 lm = None
 
 
+# fix this
+def setup_lm():
+    global lm
+    lm = dspy.LM("ollama/llama3.2", api_base="http://localhost:11434")
+    dspy.configure(lm=lm)
+
+
 def get_program():
     global program
     if program is None:
@@ -24,17 +31,6 @@ def optimize():
     program = build_program()
     program = train(program, table.rows)
     return program
-
-
-def reset_program():
-    global program
-    program = None
-
-
-def setup_lm():
-    global lm
-    lm = dspy.LM("ollama/llama3.2", api_base="http://localhost:11434")
-    dspy.configure(lm=lm)
 
 
 def build_signature(block):
@@ -89,14 +85,14 @@ def build_wrapper(block):
             module=base_module,
             reward_fn=build_reward_fn(block),
             threshold=block.threshold,
-            N=block.N,
+            N=int(block.N),
         )
     else:
         return dspy.BestOfN(
             module=base_module,
             reward_fn=build_reward_fn(block),
             threshold=block.threshold,
-            N=block.N,
+            N=int(block.N),
         )
 
 

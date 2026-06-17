@@ -5,6 +5,98 @@ import config
 import json
 
 
+def build_cell(
+    value,
+    col,
+    row_id,
+    readonly=False,
+    placeholder="",
+    cell_attrs=None,
+    row_id_prefix="cell",
+):
+    attrs = cell_attrs(row_id, col) if cell_attrs else {}
+    return Td(
+        Input(
+            type="text",
+            value=value,
+            placeholder=placeholder,
+            id=f"{row_id_prefix}_{row_id}_{col}",
+            name=f"{row_id_prefix}_{row_id}_{col}",
+            readonly=readonly,
+            cls=(
+                "w-full border-2 border-transparent outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full focus:border-primary focus:ring-1 focus:ring-primary"
+                if not readonly
+                else "w-full border-0 outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full cursor-default"
+            ),
+            style="box-shadow: none; -webkit-appearance: none; -moz-appearance: none; margin: 0;",
+            **attrs,
+        ),
+        cls="border border-border",
+        style="padding: 0; margin: 0; height: 41px;",
+    )
+
+
+def build_row_id_cell(row_id):
+    return Td(
+        str(row_id),
+        cls="border border-border text-center text-muted-foreground text-sm w-12",
+        style="padding: 0; margin: 0; height: 41px; line-height: 41px;",
+    )
+
+
+def build_delete_cell(delete_url, row_id, target):
+    return Td(
+        Button(
+            UkIcon("x"),
+            cls="text-destructive p-0 shadow-none",
+            hx_delete=f"{delete_url}/{row_id}",
+            hx_target=target,
+            hx_swap="outerHTML",
+            title="Delete row",
+        ),
+        cls="border border-border text-center w-10",
+        style="padding: 0; margin: 0; height: 41px;",
+    )
+
+
+def build_add_row_button(add_url, target):
+    return Tr(
+        Td(
+            Button(
+                UkIcon("plus", height=16),
+                cls=ButtonT.primary,
+                hx_post=add_url,
+                hx_target=target,
+                hx_swap="outerHTML",
+                title="Add new row",
+            ),
+            cls="border border-border",
+            style="padding: 0; margin: 0; height: 41px;",
+        ),
+        style="padding: 0; margin: 0;",
+    )
+
+
+def build_header_cell(col):
+    return Th(
+        Div(
+            DivLAligned(
+                Input(
+                    type="text",
+                    value=col,
+                    readonly=True,
+                    cls="border-0 outline-0 ring-0 bg-transparent font-medium text-sm px-3 py-2 m-0 rounded-none block flex-1 cursor-default",
+                    style="box-shadow: none;",
+                ),
+                cls="gap-1 items-center border border-border",
+            ),
+            cls="relative w-full",
+        ),
+        cls="bg-muted",
+        style="padding: 0; margin: 0;",
+    )
+
+
 def render_column_header(block_id, table_type, column_index, value="", readonly=False):
     block = next(b for b in config.blocks if b.id == block_id)
     if readonly:
@@ -69,7 +161,7 @@ def render_column_header(block_id, table_type, column_index, value="", readonly=
         ),
         (
             Div(
-                cls="column-suggestions hidden absolute z-50 mt-1 w-full bg-card border rounded shadow-lg max-h-48 overflow-y-auto overflow-x-auto"
+                cls="column-suggestions hidden absolute z-50 mt-1 w-full bg-card border rounded shadow-lg max-h-48 overflow-y-auto"
             )
             if table_type == "inputs"
             else ""
@@ -139,53 +231,35 @@ def render_table_header(block, table_type, readonly=False):
 def render_table_row(row, columns, table_type, readonly=False, block_id_score=None):
     cells = []
     if table_type == "inputs":
-        cells.append(
-            Td(
-                str(row["id"]),
-                cls="border border-border text-center text-muted-foreground text-sm w-12",
-                style="padding: 0; margin: 0; height: 41px; line-height: 41px;",
-            )
-        )
+        cells.append(build_row_id_cell(row["id"]))
+
     for col in columns:
         cells.append(
-            Td(
-                Input(
-                    type="text",
-                    value=row.get(col, ""),
-                    placeholder=f"Enter {col}" if not readonly else "",
-                    id=f"cell_{row['id']}_{col}",
-                    name=f"cell_{row['id']}_{col}",
-                    readonly=readonly,
-                    hx_post="/save-cell" if not readonly else None,
-                    hx_trigger="change delay:300ms" if not readonly else None,
-                    hx_vals=f'{{"row_id": "{row["id"]}", "col_name": "{col}"}}' if not readonly else None,
-                    hx_include="this",
-                    cls=(
-                        "w-full border-2 border-transparent outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full focus:border-primary focus:ring-1 focus:ring-primary"
-                        if not readonly
-                        else "w-full border-0 outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full cursor-default"
-                    ),
-                    style="box-shadow: none; -webkit-appearance: none; -moz-appearance: none; margin: 0;",
+            build_cell(
+                value=row.get(col, ""),
+                col=col,
+                row_id=row["id"],
+                readonly=readonly,
+                placeholder=f"Enter {col}" if not readonly else "",
+                cell_attrs=lambda r, c: (
+                    {
+                        "hx_post": "/save-cell",
+                        "hx_trigger": "change delay:300ms",
+                        "hx_vals": f'{{"row_id": "{r}", "col_name": "{c}"}}',
+                        "hx_include": "this",
+                        "hx_swap": "none",
+                    }
+                    if not readonly
+                    else {}
                 ),
-                cls="border border-border",
-                style="padding: 0; margin: 0; height: 41px;",
             )
         )
+
     if table_type == "outputs" and not readonly:
         cells.append(
-            Td(
-                Button(
-                    UkIcon("x"),
-                    cls=(ButtonT.link, "text-destructive p-0 shadow-none"),
-                    hx_delete=f"/table/delete-row/{row['id']}",
-                    hx_target="#main-container",
-                    hx_swap="outerHTML",
-                    title="Delete row",
-                ),
-                cls="border border-border text-center w-10",
-                style="padding: 0; margin: 0; height: 41px;",
-            )
+            build_delete_cell("/table/delete-row", row["id"], "#main-container")
         )
+
     if readonly and block_id_score and table_type == "outputs":
         cells.append(
             Td(
@@ -199,38 +273,26 @@ def render_table_row(row, columns, table_type, readonly=False, block_id_score=No
                 style="padding:0;margin:0;height:41px;",
             )
         )
+
     return Tr(*cells, cls="hover:bg-muted/50", style="padding: 0; margin: 0;")
 
 
-def render_table_inner(block, table_type, readonly=False, block_id_score=None):
+def render_table_inner(
+    block, table_type, readonly=False, block_id_score=None, carry_cls="", carry_style=""
+):
     columns = block.get_columns(table_type)
     body_content = [
         render_table_row(row, columns, table_type, readonly, block_id_score)
         for row in table.rows
     ]
     if table_type == "inputs" and not readonly:
-        body_content.append(
-            Tr(
-                Td(
-                    Button(
-                        UkIcon("plus", height=16),
-                        cls=ButtonT.primary,
-                        hx_post="/table/add-row",
-                        hx_target="#main-container",
-                        hx_swap="outerHTML",
-                        title="Add new row",
-                    ),
-                    cls="border border-border",
-                    style="padding: 0; margin: 0; height: 41px;",
-                ),
-                style="padding: 0; margin: 0;",
-            )
-        )
+        body_content.append(build_add_row_button("/table/add-row", "#main-container"))
+
     return Table(
         Thead(render_table_header(block, table_type, readonly)),
-        Tbody(*body_content if isinstance(body_content, list) else [body_content]),
-        cls="w-full {carry_cls}",
-        style="border-collapse: collapse; border-spacing: 0; {carry_style}",
+        Tbody(*body_content),
+        cls=f"w-full {carry_cls}",
+        style=f"border-collapse: collapse; border-spacing: 0; {carry_style}",
     )
 
 

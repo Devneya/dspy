@@ -43,6 +43,10 @@ def render_wrapper_workspace(block):
                         hx_post="/save-threshold",
                         hx_vals=f'{{"block_id": "{block.id}"}}',
                         hx_trigger="change",
+                        **{
+                            "onchange": f"window._wrapperData['{block.id}'].threshold = parseFloat(this.value);",
+                            "data-block-id": block.id,
+                        },
                     ),
                     cls="gap-0",
                 ),

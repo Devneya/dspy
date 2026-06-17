@@ -2,6 +2,13 @@ from fasthtml.common import *
 from monsterui.all import *
 from data.table_data import inference_table
 import config
+from renders.table import (
+    build_add_row_button,
+    build_cell,
+    build_delete_cell,
+    build_header_cell,
+    build_row_id_cell,
+)
 
 
 def get_top_level_inputs():
@@ -27,109 +34,51 @@ def get_output_columns():
 
 def render_input_table():
     top_inputs = sorted(get_top_level_inputs())
-
     if not top_inputs:
         return Div(P("No inputs needed", cls="text-sm text-muted-foreground"))
-
-    inference_table.columns = set(top_inputs)
-
     if not inference_table.rows:
         inference_table.add_row()
-
     header_cells = [
         Th(
             "",
             cls="w-12 text-center border border-border bg-muted",
             style="padding: 0; margin: 0;",
-        ),
+        )
     ]
     for col in top_inputs:
-        header_cells.append(
-            Th(
-                Div(
-                    DivLAligned(
-                        Input(
-                            type="text",
-                            value=col,
-                            readonly=True,
-                            cls="border-0 outline-0 ring-0 bg-transparent font-medium text-sm px-3 py-2 m-0 rounded-none block flex-1 cursor-default",
-                            style="box-shadow: none;",
-                        ),
-                        cls="gap-1 items-center border border-border",
-                    ),
-                    cls="relative w-full",
-                ),
-                cls="bg-muted",
-                style="padding: 0; margin: 0;",
-            )
-        )
-
+        header_cells.append(build_header_cell(col))
     body_rows = []
     for row in inference_table.rows:
-        cells = [
-            Td(
-                str(row["id"]),
-                cls="border border-border text-center text-muted-foreground text-sm w-12",
-                style="padding: 0; margin: 0; height: 41px; line-height: 41px;",
-            )
-        ]
+        cells = [build_row_id_cell(row["id"])]
         for col in top_inputs:
             cells.append(
-                Td(
-                    Input(
-                        type="text",
-                        value=row.get(col, ""),
-                        placeholder=f"Enter {col}",
-                        id=f"infer_{row['id']}_{col}",
-                        name=f"infer_{row['id']}_{col}",
-                        hx_post="/save-inference-cell",
-                        hx_trigger="change",
-                        hx_vals=f'{{"row_id": "{row["id"]}", "col_name": "{col}"}}',
-                        hx_include="this",
-                        hx_swap="none",
-                        cls="w-full border-2 border-transparent outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full focus:border-primary focus:ring-1 focus:ring-primary",
-                        style="box-shadow: none; -webkit-appearance: none; -moz-appearance: none; margin: 0;",
-                    ),
-                    cls="border border-border",
-                    style="padding: 0; margin: 0; height: 41px;",
+                build_cell(
+                    value=row.get(col, ""),
+                    col=col,
+                    row_id=row["id"],
+                    placeholder=f"Enter {col}",
+                    cell_attrs=lambda r, c: {
+                        "hx_post": "/save-inference-cell",
+                        "hx_trigger": "change",
+                        "hx_vals": f'{{"row_id": "{r}", "col_name": "{c}"}}',
+                        "hx_include": "this",
+                        "hx_swap": "none",
+                    },
+                    row_id_prefix="infer",
                 )
             )
         cells.append(
-            Td(
-                Button(
-                    UkIcon("x"),
-                    cls="text-destructive p-0 shadow-none",
-                    hx_delete=f"/inference/delete-row/{row['id']}",
-                    hx_target="#inference-section",
-                    hx_swap="outerHTML",
-                    title="Delete row",
-                ),
-                cls="border border-border text-center w-10",
-                style="padding: 0; margin: 0; height: 41px;",
-            )
+            build_delete_cell("/inference/delete-row", row["id"], "#inference-section")
         )
         body_rows.append(
             Tr(*cells, cls="hover:bg-muted/50", style="padding: 0; margin: 0;")
         )
-
     body_rows.append(
         Tr(
-            Td(
-                Button(
-                    UkIcon("plus", height=16),
-                    cls=ButtonT.primary,
-                    hx_post="/inference/add-row",
-                    hx_target="#inference-section",
-                    hx_swap="outerHTML",
-                    title="Add new row",
-                ),
-                cls="border border-border",
-                style="padding: 0; margin: 0; height: 41px;",
-            ),
+            build_add_row_button("/inference/add-row", "#inference-section"),
             style="padding: 0; margin: 0;",
         )
     )
-
     return DivVStacked(
         H5("Inputs", cls="mb-3"),
         Table(
@@ -150,7 +99,6 @@ def render_output_table():
         if c not in get_top_level_inputs()
     ]
     all_outputs = output_cols + [c for c in result_cols if c not in output_cols]
-
     if not all_outputs:
         return DivVStacked(
             H5("Outputs", cls="mb-3"),
@@ -160,47 +108,19 @@ def render_output_table():
 
     header_cells = []
     for col in all_outputs:
-        header_cells.append(
-            Th(
-                Div(
-                    DivLAligned(
-                        Input(
-                            type="text",
-                            value=col,
-                            readonly=True,
-                            cls="border-0 outline-0 ring-0 bg-transparent font-medium text-sm px-3 py-2 m-0 rounded-none block flex-1 cursor-default",
-                            style="box-shadow: none;",
-                        ),
-                        cls="gap-1 items-center border border-border",
-                    ),
-                    cls="relative w-full",
-                ),
-                cls="bg-muted",
-                style="padding: 0; margin: 0;",
-            )
-        )
-
+        header_cells.append(build_header_cell(col))
     body_rows = []
     for row in inference_table.rows:
         cells = []
         for col in all_outputs:
             cells.append(
-                Td(
-                    Input(
-                        type="text",
-                        value=row.get(col, "—"),
-                        readonly=True,
-                        cls="w-full border-0 outline-0 ring-0 bg-transparent px-3 py-2 m-0 rounded-none block h-full cursor-default",
-                        style="box-shadow: none; margin: 0;",
-                    ),
-                    cls="border border-border",
-                    style="padding: 0; margin: 0; height: 41px;",
+                build_cell(
+                    value=row.get(col, "—"), col=col, row_id=row["id"], readonly=True
                 )
             )
         body_rows.append(
             Tr(*cells, cls="hover:bg-muted/50", style="padding: 0; margin: 0;")
         )
-
     return DivVStacked(
         H5("Outputs", cls="mb-3"),
         Table(

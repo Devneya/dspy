@@ -198,12 +198,13 @@
     }
   }
 
-  async function testReward(blockId) {
+async function testReward(blockId) {
     const editor = editors[blockId];
     const code = editor
       ? editor.getValue()
       : document.getElementById(`code-editor-${blockId}`)?.value || "";
     const data = (window._wrapperData || {})[blockId];
+    const threshold = parseFloat(data?.threshold) || 0.5;
     const statusEl = document.getElementById(`test-status-${blockId}`);
     const btn = document.getElementById(`test-btn-${blockId}`);
 
@@ -277,11 +278,13 @@
       });
 
       const errors = results.filter((r) => r.error).length;
+      const passed = results.filter((r) => !r.error && r.score >= threshold).length;
+      
       if (statusEl) {
         statusEl.textContent =
           errors > 0
             ? `${errors}/${results.length} errors`
-            : `${results.filter((r) => r.score >= 0.4).length}/${results.length} passed`;
+            : `${passed}/${results.length} passed`;
         statusEl.className =
           "text-xs " +
           (errors > 0 ? "text-destructive" : "text-muted-foreground") +
@@ -290,13 +293,6 @@
     } catch (err) {
       console.error("Test error:", err);
       if (statusEl) statusEl.textContent = "Error: " + err.message;
-      data.rows.forEach((row) => {
-        const el = document.getElementById(`score-${blockId}-${row.id}`);
-        if (el) {
-          el.textContent = "ERR";
-          el.className = "reward-score err";
-        }
-      });
     }
 
     if (btn) btn.disabled = false;

@@ -3,7 +3,7 @@ from data.block_data import RegularBlock
 
 class TableData:
     def __init__(self):
-        self.columns = {"input", "output"}
+        self.columns = set()
         self.rows = []
         self.next_id = 1
 
