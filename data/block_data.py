@@ -53,13 +53,13 @@ class WrapperBlock(BlockData):
     def __init__(self, block_type, position):
         super().__init__(block_type, position)
         self.wrapped_block_id = config.blocks[position - 1].id if position > 0 else None
-        self.N = config.DSPY_MODULE_SCHEMAS.get(block_type, {}).get(
+        self.N: int = config.DSPY_MODULE_SCHEMAS.get(block_type, {}).get(
             "default_N", 3
         )
         self.reward_code = config.DSPY_MODULE_SCHEMAS.get(block_type, {}).get(
             "reward_code", ""
         )
-        self.threshold = config.DSPY_MODULE_SCHEMAS.get(block_type, {}).get(
+        self.threshold: float = config.DSPY_MODULE_SCHEMAS.get(block_type, {}).get(
             "default_threshold", 0.5
         )
         self.fail_count = None

@@ -1,5 +1,9 @@
 import os
+from dotenv import load_dotenv
 import yaml
+
+
+load_dotenv()
 
 SCHEMA_PATH = os.path.join("static", "dspy_schemas.yaml")
 with open(SCHEMA_PATH, "r") as f:
@@ -16,13 +20,19 @@ MODULE_NAMES = {
     block_type: schema["name"] for block_type, schema in DSPY_MODULE_SCHEMAS.items()
 }
 
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+
 init_predict = False
 blocks = []
 block_id = 1
 active_block_id = None
-is_optimized = False
+in_working_order = False
 current_mode = "build"
+lm_model = "ollama/llama3.2"
 
 def mark_unoptimized():
-    global is_optimized
-    is_optimized = False
+    global in_working_order
+    in_working_order = False

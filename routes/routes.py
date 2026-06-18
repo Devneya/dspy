@@ -61,6 +61,55 @@ def get():
             cls="fixed bottom-4 right-4 z-50 shadow-none",
             id="theme-toggle",
         ),
+        DivLAligned(
+            Span("Model:", cls="text-sm text-muted-foreground mr-2"),
+            Select(
+                Option(
+                    "Ollama llama3.2",
+                    value="ollama/llama3.2",
+                    selected=config.lm_model == "ollama/llama3.2",
+                ),
+                Option(
+                    "OpenAI GPT-4o-mini",
+                    value="openai/gpt-4o-mini",
+                    selected=config.lm_model == "openai/gpt-4o-mini",
+                ),
+                Option(
+                    "OpenAI GPT-4o",
+                    value="openai/gpt-4o",
+                    selected=config.lm_model == "openai/gpt-4o",
+                ),
+                Option(
+                    "Anthropic Claude Haiku",
+                    value="anthropic/claude-3-haiku",
+                    selected=config.lm_model == "anthropic/claude-3-haiku",
+                ),
+                Option(
+                    "Anthropic Claude Sonnet",
+                    value="anthropic/claude-3-sonnet",
+                    selected=config.lm_model == "anthropic/claude-3-sonnet",
+                ),
+                Option(
+                    "Gemini 1.5 Flash",
+                    value="gemini/gemini-1.5-flash",
+                    selected=config.lm_model == "gemini/gemini-1.5-flash",
+                ),
+                Option(
+                    "Gemini 1.5 Pro",
+                    value="gemini/gemini-1.5-pro",
+                    selected=config.lm_model == "gemini/gemini-1.5-pro",
+                ),
+                name="lm_model",
+                id="lm-selector",
+                cls="text-sm",
+                hx_post="/set-lm",
+                hx_trigger="change",
+                hx_target="#lm-status",
+                hx_swap="innerHTML",
+            ),
+            Span(id="lm-status", cls="text-xs text-muted-foreground ml-2"),
+            cls="fixed top-4 right-4 z-50",
+        ),
         render_full_page(),
     )
 
@@ -251,6 +300,7 @@ async def save_threshold(request):
     config.mark_unoptimized()
     return ""
 
+
 @rt("/save-repeat", methods=["POST"])
 async def save_repeat(request):
     form = await request.form()
@@ -336,11 +386,33 @@ async def upload_inference_file(request):
     return render_inference_section()
 
 
+@rt("/set-lm", methods=["POST"])
+async def set_lm(request):
+    form = await request.form()
+    config.lm_model = form.get("lm_model", "ollama/llama3.2")
+    config.mark_unoptimized()
+
+
 @rt("/optimize", methods=["POST"])
 async def optimize_all():
     optimize()
-    config.is_optimized = True
-    return Div(render_inference_section(), cls="w-full")
+    config.in_working_order = True
+    return Div(
+        render_inference_section(),
+        id="use-mode-container",
+        cls="w-full",
+    )
+
+
+@rt("/skip-optimize", methods=["POST"])
+async def skip_optimize():
+    get_program()
+    config.in_working_order = True
+    return Div(
+        render_inference_section(),
+        id="use-mode-container",
+        cls="w-full",
+    )
 
 
 @rt("/infer", methods=["POST"])

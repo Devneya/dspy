@@ -10,15 +10,28 @@ program = None
 lm = None
 
 
-# fix this
 def setup_lm():
     global lm
-    lm = dspy.LM("ollama/llama3.2", api_base="http://localhost:11434")
+    model = config.lm_model
+
+    if model.startswith("openai"):
+        lm = dspy.LM(model, api_key=config.OPENAI_API_KEY)
+    elif model.startswith("anthropic"):
+        lm = dspy.LM(model, api_key=config.ANTHROPIC_API_KEY)
+    elif model.startswith("gemini"):
+        lm = dspy.LM(model, api_key=config.GOOGLE_API_KEY)
+    elif model.startswith("ollama"):
+        lm = dspy.LM(model, api_base="http://localhost:11434")
+    else:
+        lm = dspy.LM(model)
+
     dspy.configure(lm=lm)
 
 
 def get_program():
-    global program
+    global program, lm
+    if lm is None:
+        setup_lm()
     if program is None:
         program = build_program()
     return program
@@ -58,11 +71,19 @@ def build_reward_fn(block):
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
 
-        fn = getattr(module, "reward_fn", None)
-        if fn:
-            return fn
+        raw_fn = getattr(module, "reward_fn", None)
+        if raw_fn:
+
+            def clean_reward(inputs, prediction):
+                result = raw_fn(inputs, prediction)
+                if isinstance(result, bool):
+                    return 1.0 if result else 0.0
+                return float(result)
+
+            return clean_reward
     except Exception as e:
         print(f"Error loading reward function: {e}", file=sys.stderr)
+
     return lambda inputs, prediction: 1.0
 
 
@@ -84,14 +105,14 @@ def build_wrapper(block):
         return dspy.Refine(
             module=base_module,
             reward_fn=build_reward_fn(block),
-            threshold=block.threshold,
+            threshold=float(block.threshold),
             N=int(block.N),
         )
     else:
         return dspy.BestOfN(
             module=base_module,
             reward_fn=build_reward_fn(block),
-            threshold=block.threshold,
+            threshold=float(block.threshold),
             N=int(block.N),
         )
 
