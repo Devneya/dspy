@@ -1,6 +1,9 @@
-import importlib
+import ast
+import json
+import os
+import subprocess
 import sys
-import uuid
+import tempfile
 import dspy
 import config
 from data.block_data import WrapperBlock
@@ -9,6 +12,131 @@ from data.table_data import table
 program = None
 lm = None
 
+FORBIDDEN_IMPORTS = {
+    "os",
+    "subprocess",
+    "sys",
+    "shutil",
+    "socket",
+    "requests",
+    "http",
+    "urllib",
+    "ftplib",
+    "telnetlib",
+    "smtplib",
+    "imaplib",
+    "pathlib",
+    "glob",
+    "fnmatch",
+    "pickle",
+    "marshal",
+    "ctypes",
+    "multiprocessing",
+    "threading",
+    "signal",
+    "pty",
+    "tty",
+    "cgi",
+    "cgitb",
+    "webbrowser",
+}
+
+FORBIDDEN_CALLS = {
+    "open",
+    "exec",
+    "eval",
+    "compile",
+    "__import__",
+    "globals",
+    "locals",
+    "getattr",
+    "setattr",
+    "delattr",
+    "breakpoint",
+    "input",
+}
+
+FORBIDDEN_ATTRS = {
+    "__builtins__",
+    "__class__",
+    "__bases__",
+    "__subclasses__",
+    "__globals__",
+    "__code__",
+    "__closure__",
+}
+
+
+class SafePythonInterpreter(dspy.PythonInterpreter):
+    def execute(self, code: str) -> str:
+        try:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--network",
+                    "none",
+                    "--memory",
+                    "128m",
+                    "--cpus",
+                    "1",
+                    "--read-only",
+                    "--tmpfs",
+                    "/tmp:noexec",
+                    "python:3.12-alpine",
+                    "python",
+                    "-c",
+                    code,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result.returncode != 0:
+                return f"Error: {result.stderr}"
+            return result.stdout
+        except subprocess.TimeoutExpired:
+            return "Error: execution timed out"
+        except Exception as e:
+            return f"Error: {e}"
+
+
+def validate_reward_code(code: str):
+    if not code or not code.strip():
+        return False, "Code is empty"
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return False, f"Syntax error: {e}"
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] in FORBIDDEN_IMPORTS:
+                    return False, f"Import not allowed: {alias.name}"
+        if isinstance(node, ast.ImportFrom):
+            if node.module and node.module.split(".")[0] in FORBIDDEN_IMPORTS:
+                return False, f"Import not allowed: {node.module}"
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in FORBIDDEN_CALLS:
+                return False, f"Call not allowed: {node.func.id}()"
+            if (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr in FORBIDDEN_CALLS
+            ):
+                return False, f"Call not allowed: .{node.func.attr}()"
+
+        if isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_ATTRS:
+            return False, f"Attribute access not allowed: .{node.attr}"
+
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "getattr" and len(node.args) >= 2:
+                if isinstance(node.args[1], ast.Constant):
+                    if node.args[1].value in FORBIDDEN_ATTRS:
+                        return False, f"getattr bypass blocked: {node.args[1].value}"
+
+    return True, "OK"
+
 
 def setup_lm():
     global lm
@@ -16,10 +144,10 @@ def setup_lm():
 
     if model.startswith("openai"):
         lm = dspy.LM(model, api_key=config.OPENAI_API_KEY)
-    elif model.startswith("anthropic"):
-        lm = dspy.LM(model, api_key=config.ANTHROPIC_API_KEY)
-    elif model.startswith("gemini"):
-        lm = dspy.LM(model, api_key=config.GOOGLE_API_KEY)
+    # elif model.startswith("anthropic"):
+    #     lm = dspy.LM(model, api_key=config.ANTHROPIC_API_KEY)
+    # elif model.startswith("gemini"):
+    #     lm = dspy.LM(model, api_key=config.GOOGLE_API_KEY)
     elif model.startswith("ollama"):
         lm = dspy.LM(model, api_base="http://localhost:11434")
     else:
@@ -55,36 +183,73 @@ def build_signature(block):
     return type(f"{block.type}_signature", (dspy.Signature,), fields)
 
 
-def build_reward_fn(block):
+def build_reward_fn_docker(block):
     code = block.reward_code
     if not code or not code.strip():
         return lambda inputs, prediction: 1.0
-    filename = f"/tmp/dspy_reward_{uuid.uuid4().hex}.py"
-    with open(filename, "w") as f:
-        f.write("import dspy\n")
+
+    ok, err = validate_reward_code(code)
+    if not ok:
+        print(f"Reward code rejected: {err}", file=sys.stderr)
+        return lambda inputs, prediction: 1.0
+
+    tmpdir = tempfile.mkdtemp()
+    codepath = os.path.join(tmpdir, "reward_fn.py")
+    with open(codepath, "w") as f:
         f.write(code)
-    try:
-        spec = importlib.util.spec_from_file_location(
-            f"reward_fn_{uuid.uuid4().hex}", filename
-        )
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
 
-        raw_fn = getattr(module, "reward_fn", None)
-        if raw_fn:
+    def docker_reward(inputs, prediction):
+        try:
+            pred_dict = {
+                k: v for k, v in prediction.__dict__.items() if not k.startswith("_")
+            }
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--network",
+                    "none",
+                    "--memory",
+                    "64m",
+                    "--cpus",
+                    "1",
+                    "--read-only",
+                    "--tmpfs",
+                    "/tmp:noexec",
+                    "-v",
+                    f"{tmpdir}:/code:ro",
+                    "python:3.12-alpine",
+                    "python",
+                    "-c",
+                    f"""
+import sys
+sys.path.insert(0, '/code')
+from reward_fn import reward_fn
+import json
 
-            def clean_reward(inputs, prediction):
-                result = raw_fn(inputs, prediction)
-                if isinstance(result, bool):
-                    return 1.0 if result else 0.0
-                return float(result)
+inputs = json.loads({json.dumps(inputs)!r})
+prediction_dict = json.loads({json.dumps(pred_dict)!r})
 
-            return clean_reward
-    except Exception as e:
-        print(f"Error loading reward function: {e}", file=sys.stderr)
+class MockPrediction:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
 
-    return lambda inputs, prediction: 1.0
+prediction = MockPrediction(**prediction_dict)
+result = reward_fn(inputs, prediction)
+print(json.dumps(float(result)))
+""",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return max(0.0, min(1.0, float(result.stdout.strip())))
+        except Exception as e:
+            print(f"Docker reward error: {e}", file=sys.stderr)
+            return 0.0
+
+    return docker_reward
 
 
 def build_module(block):
@@ -92,7 +257,7 @@ def build_module(block):
     if block.type == "chainofthought":
         return dspy.ChainOfThought(signature)
     elif block.type == "programofthought":
-        return dspy.ProgramOfThought(signature)
+        return dspy.ProgramOfThought(signature, interpreter=SafePythonInterpreter())
     elif block.type == "multichaincomparison":
         return dspy.MultiChainComparison(signature)
     return dspy.Predict(signature)
@@ -104,14 +269,14 @@ def build_wrapper(block):
     if block.type == "refine":
         return dspy.Refine(
             module=base_module,
-            reward_fn=build_reward_fn(block),
+            reward_fn=build_reward_fn_docker(block),
             threshold=float(block.threshold),
             N=int(block.N),
         )
     else:
         return dspy.BestOfN(
             module=base_module,
-            reward_fn=build_reward_fn(block),
+            reward_fn=build_reward_fn_docker(block),
             threshold=float(block.threshold),
             N=int(block.N),
         )
@@ -164,9 +329,6 @@ def build_trainset(examples):
         inputs = {k: v for k, v in example_data.items() if k not in all_outputs}
         if inputs:
             trainset.append(dspy.Example(**example_data).with_inputs(*inputs.keys()))
-    print(f"Trainset size: {len(trainset)}", file=sys.stderr)
-    for t in trainset:
-        print(f"  Example: {t}", file=sys.stderr)
     return trainset
 
 

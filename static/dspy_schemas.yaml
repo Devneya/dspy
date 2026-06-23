@@ -5,7 +5,7 @@ predict:
 
 chainofthought:
   name: ChainOfThought
-  description: "Shows reasoning steps"
+  description: "Thinks step-by-step"
   wrapper: 0
 
 programofthought:

@@ -79,26 +79,26 @@ def get():
                     value="openai/gpt-4o",
                     selected=config.lm_model == "openai/gpt-4o",
                 ),
-                Option(
-                    "Anthropic Claude Haiku",
-                    value="anthropic/claude-3-haiku",
-                    selected=config.lm_model == "anthropic/claude-3-haiku",
-                ),
-                Option(
-                    "Anthropic Claude Sonnet",
-                    value="anthropic/claude-3-sonnet",
-                    selected=config.lm_model == "anthropic/claude-3-sonnet",
-                ),
-                Option(
-                    "Gemini 1.5 Flash",
-                    value="gemini/gemini-1.5-flash",
-                    selected=config.lm_model == "gemini/gemini-1.5-flash",
-                ),
-                Option(
-                    "Gemini 1.5 Pro",
-                    value="gemini/gemini-1.5-pro",
-                    selected=config.lm_model == "gemini/gemini-1.5-pro",
-                ),
+                # Option(
+                #     "Anthropic Claude Haiku",
+                #     value="anthropic/claude-3-haiku",
+                #     selected=config.lm_model == "anthropic/claude-3-haiku",
+                # ),
+                # Option(
+                #     "Anthropic Claude Sonnet",
+                #     value="anthropic/claude-3-sonnet",
+                #     selected=config.lm_model == "anthropic/claude-3-sonnet",
+                # ),
+                # Option(
+                #     "Gemini 1.5 Flash",
+                #     value="gemini/gemini-1.5-flash",
+                #     selected=config.lm_model == "gemini/gemini-1.5-flash",
+                # ),
+                # Option(
+                #     "Gemini 1.5 Pro",
+                #     value="gemini/gemini-1.5-pro",
+                #     selected=config.lm_model == "gemini/gemini-1.5-pro",
+                # ),
                 name="lm_model",
                 id="lm-selector",
                 cls="text-sm",
