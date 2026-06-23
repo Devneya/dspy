@@ -2,3 +2,5 @@ python-fasthtml
 monsterui
 uvicorn
 pyyaml
+dspy-ai
+python-dotenv

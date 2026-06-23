@@ -242,7 +242,7 @@ print(json.dumps(float(result)))
                 ],
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=100,
             )
             return max(0.0, min(1.0, float(result.stdout.strip())))
         except Exception as e:
