@@ -76,27 +76,30 @@ def render_use_view():
     return DivVStacked(
         Div(id="optimize-status", cls="text-sm text-muted-foreground mb-2"),
         Div(id="use-mode-container", cls="w-full")(
-            Div(
-                DivCentered(
-                    Button(
-                        Span("Optimize", cls="ml-1"),
-                        cls=(ButtonT.primary, "text-sm"),
-                        hx_post="/optimize",
-                        hx_target="#use-mode-container",
-                        hx_swap="outerHTML",
+            (
+                Div(
+                    DivCentered(
+                        Button(
+                            Span("Optimize", cls="ml-1"),
+                            cls=(ButtonT.primary, "text-sm"),
+                            hx_post="/optimize",
+                            hx_target="#use-mode-container",
+                            hx_swap="outerHTML",
+                        ),
+                        Button(
+                            Span("Skip", cls="ml-1"),
+                            cls=(ButtonT.default, "text-sm ml-2"),
+                            hx_post="/skip-optimize",
+                            hx_target="#use-mode-container",
+                            hx_swap="outerHTML",
+                        ),
                     ),
-                    Button(
-                        Span("Skip", cls="ml-1"),
-                        cls=(ButtonT.default, "text-sm ml-2"),
-                        hx_post="/skip-optimize",
-                        hx_target="#use-mode-container",
-                        hx_swap="outerHTML",
-                    ),
-                ),
-                cls="mb-4",
-            ) if not config.in_working_order else "",
+                    cls="mb-4",
+                )
+                if not config.in_working_order
+                else ""
+            ),
             render_inference_section() if config.in_working_order else Div(),
         ),
         cls="w-full",
     )
-
