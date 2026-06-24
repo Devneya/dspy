@@ -182,18 +182,17 @@
       : document.getElementById(`code-editor-${blockId}`)?.value || "";
 
     htmx.ajax("POST", "/save-reward-code", {
-      swap: "none",
+      target: `#save-status-${blockId}`,
+      swap: "innerHTML",
       values: { block_id: blockId, code },
     });
 
     const btn = document.querySelector(`[onclick*="saveCode('${blockId}')"]`);
     if (btn) {
       const orig = btn.innerHTML;
-      btn.innerHTML = "✓";
-      btn.disabled = true;
+      btn.innerHTML = "Saving...";
       setTimeout(() => {
         btn.innerHTML = orig;
-        btn.disabled = false;
       }, 1500);
     }
   }

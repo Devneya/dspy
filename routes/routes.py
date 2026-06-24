@@ -1,7 +1,7 @@
 from fasthtml.common import *
 from monsterui.all import *
 import yaml
-from core.core import get_program, optimize, run as core_run
+from core.core import get_program, optimize, run as core_run, validate_reward_code
 from data.block_data import create_block, RegularBlock, WrapperBlock
 from data.table_data import normalize_key, normalize_row, table, inference_table
 from renders.inference import get_output_columns, get_top_level_inputs, render_inference_section
@@ -293,10 +293,13 @@ async def save_cell(request):
 
 
 @rt("/save-reward-code", methods=["POST"])
-async def save_reward_code(request):
+async def save_reward_code(request):    
     form = await request.form()
     block_id = form.get("block_id", "")
     code = form.get("code", "")
+    ok, msg = validate_reward_code(code)
+    if not ok:
+        return Span(f"Blocked: {msg}", cls="text-destructive text-xs")
     block = next((b for b in config.blocks if b.id == block_id), None)
     if block and isinstance(block, WrapperBlock):
         block.reward_code = code

@@ -96,6 +96,11 @@ def render_wrapper_workspace(block):
                         id=f"test-status-{block.id}",
                         cls="text-xs text-muted-foreground ml-2 p-0",
                     ),
+                    Span(
+                        "",
+                        id=f"save-status-{block.id}", 
+                        cls="text-xs ml-2"
+                    ),
                     cls="items-center gap-0",
                 ),
                 cls="mb-3",
