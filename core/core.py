@@ -141,9 +141,11 @@ def validate_reward_code(code: str):
 def setup_lm():
     global lm
     model = config.lm_model
-
+    
     if model.startswith("openai"):
         lm = dspy.LM(model, api_key=config.OPENAI_API_KEY)
+    elif model.startswith("deepseek"):
+        lm = dspy.LM(model, api_key=config.DEEPSEEK_API_KEY)
     # elif model.startswith("anthropic"):
     #     lm = dspy.LM(model, api_key=config.ANTHROPIC_API_KEY)
     # elif model.startswith("gemini"):

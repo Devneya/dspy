@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 import yaml
 
-
 load_dotenv()
 
 SCHEMA_PATH = os.path.join("static", "dspy_schemas.yaml")
@@ -21,7 +20,8 @@ MODULE_NAMES = {
 }
 
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 # ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 # GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 

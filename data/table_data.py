@@ -1,6 +1,14 @@
 from data.block_data import RegularBlock
 
 
+def normalize_key(key: str):
+    return key.strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def normalize_row(row: dict):
+    return {normalize_key(k): v for k, v in row.items()}
+
+
 class TableData:
     def __init__(self):
         self.columns = set()

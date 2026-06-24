@@ -198,7 +198,7 @@
     }
   }
 
-async function testReward(blockId) {
+  async function testReward(blockId) {
     const editor = editors[blockId];
     const code = editor
       ? editor.getValue()
@@ -278,8 +278,10 @@ async function testReward(blockId) {
       });
 
       const errors = results.filter((r) => r.error).length;
-      const passed = results.filter((r) => !r.error && r.score >= threshold).length;
-      
+      const passed = results.filter(
+        (r) => !r.error && r.score >= threshold,
+      ).length;
+
       if (statusEl) {
         statusEl.textContent =
           errors > 0

@@ -40,7 +40,7 @@ def build_row_id_cell(row_id):
     return Td(
         str(row_id),
         cls="border border-border text-center text-muted-foreground text-sm w-12",
-        style="padding: 0; margin: 0; height: 41px; line-height: 41px;",
+        style="padding: 0; margin: 0; height: 41px; line-height: 35px;",
     )
 
 
@@ -55,7 +55,7 @@ def build_delete_cell(delete_url, row_id, target):
             title="Delete row",
         ),
         cls="border border-border text-center w-10",
-        style="padding: 0; margin: 0; height: 41px;",
+        style="padding: 0; margin: 0; height: 35px;",
     )
 
 

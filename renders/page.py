@@ -69,6 +69,24 @@ def render_tabs_view(active_block):
             render_table_with_header(active_block, "outputs"),
             cls="w-full mt-4",
         ),
+        Button(
+            UkIcon("upload", height=14),
+            Span("Load file", cls="ml-1"),
+            cls=(ButtonT.default, "text-sm mt-4"),
+            **{"onclick": "document.getElementById('build-file-input').click()"},
+        ),
+        Input(
+            type="file",
+            name="file",
+            accept=".csv,.json,.yaml,.yml",
+            cls="hidden",
+            id="build-file-input",
+            hx_post="/table/upload",
+            hx_target="#main-container",
+            hx_swap="outerHTML",
+            hx_encoding="multipart/form-data",
+            hx_trigger="change",
+        ),
     )
 
 

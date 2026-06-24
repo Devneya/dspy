@@ -142,6 +142,14 @@ def render_inference_section():
         ),
         DivLAligned(
             Button(
+                UkIcon("upload", height=14),
+                Span("Load Inputs", cls="ml-1"),
+                cls=(ButtonT.default, "text-sm mt-4 ml-2"),
+                **{
+                    "onclick": "document.getElementById('inference-file-input').click()"
+                },
+            ),
+            Button(
                 UkIcon("play", height=14),
                 Span("Run", cls="ml-1"),
                 cls=(ButtonT.primary, "text-sm mt-4"),
@@ -151,12 +159,10 @@ def render_inference_section():
                 hx_include="[id^='infer_']",
             ),
             Button(
-                UkIcon("upload", height=14),
-                Span("Load file", cls="ml-1"),
+                UkIcon("download", height=14),
+                Span("Save Outputs", cls="ml-1"),
                 cls=(ButtonT.default, "text-sm mt-4 ml-2"),
-                **{
-                    "onclick": "document.getElementById('inference-file-input').click()"
-                },
+                **{"onclick": "window.location.href='/inference/download'"},
             ),
             Span(
                 "", id="inference-status", cls="text-xs text-muted-foreground ml-3 mt-4"
@@ -166,7 +172,7 @@ def render_inference_section():
         Input(
             type="file",
             name="file",
-            accept=".csv,.json",
+            accept=".csv,.json,.yaml,.yml",
             cls="hidden",
             id="inference-file-input",
             hx_post="/inference/upload",

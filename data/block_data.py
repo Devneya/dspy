@@ -69,10 +69,6 @@ class WrapperBlock(BlockData):
             return None
         return next((b for b in config.blocks if b.id == self.wrapped_block_id), None)
 
-    @property
-    def effective_fail_count(self):
-        return self.fail_count if self.fail_count is not None else self.N
-
 
 def create_block(block_type, position):
     if block_type in config.WRAPPER_TYPES:

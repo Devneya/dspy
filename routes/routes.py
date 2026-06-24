@@ -1,13 +1,16 @@
 from fasthtml.common import *
 from monsterui.all import *
+import yaml
 from core.core import get_program, optimize, run as core_run
 from data.block_data import create_block, RegularBlock, WrapperBlock
-from data.table_data import table, inference_table
-from renders.inference import get_top_level_inputs, render_inference_section
+from data.table_data import normalize_key, normalize_row, table, inference_table
+from renders.inference import get_output_columns, get_top_level_inputs, render_inference_section
 from renders.page import render_full_page, render_use_view
 import config
 import json
 import time
+import csv
+import io
 
 app, rt = fast_app(
     live=False,
@@ -70,15 +73,30 @@ def get():
                     selected=config.lm_model == "ollama/llama3.2",
                 ),
                 Option(
-                    "OpenAI GPT-4o-mini",
-                    value="openai/gpt-4o-mini",
-                    selected=config.lm_model == "openai/gpt-4o-mini",
+                    "DeepSeek Chat",
+                    value="deepseek/deepseek-chat",
+                    selected=config.lm_model == "deepseek/deepseek-chat",
                 ),
                 Option(
-                    "OpenAI GPT-4o",
-                    value="openai/gpt-4o",
-                    selected=config.lm_model == "openai/gpt-4o",
+                    "DeepSeek Reasoner",
+                    value="deepseek/deepseek-reasoner",
+                    selected=config.lm_model == "deepseek/deepseek-reasoner",
                 ),
+                Option(
+                    "DeepSeek Coder",
+                    value="deepseek/deepseek-coder",
+                    selected=config.lm_model == "deepseek/deepseek-coder",
+                ),
+                # Option(
+                #     "OpenAI GPT-4o-mini",
+                #     value="openai/gpt-4o-mini",
+                #     selected=config.lm_model == "openai/gpt-4o-mini",
+                # ),
+                # Option(
+                #     "OpenAI GPT-4o",
+                #     value="openai/gpt-4o",
+                #     selected=config.lm_model == "openai/gpt-4o",
+                # ),
                 # Option(
                 #     "Anthropic Claude Haiku",
                 #     value="anthropic/claude-3-haiku",
@@ -219,7 +237,7 @@ async def save_column(request):
     block_id = form.get("block_id", "")
     table_type = form.get("table_type", "")
     col_index = int(form.get("col_index", 0))
-    value = form.get("value", "").strip()
+    value = normalize_key(form.get("value", "").strip())
     original_value = form.get("original_value", "")
     is_new = form.get("is_new", "false").lower() == "true"
 
@@ -349,10 +367,6 @@ async def save_inference_cell(request):
 
 @rt("/inference/upload", methods=["POST"])
 async def upload_inference_file(request):
-    import csv
-    import io
-    import json as json_module
-
     form = await request.form()
     file = form.get("file")
 
@@ -366,24 +380,109 @@ async def upload_inference_file(request):
     inference_table.columns = set(top_inputs)
     inference_table.clear_rows()
 
+
     if filename.endswith(".csv"):
         reader = csv.DictReader(io.StringIO(content.decode()))
         for row in reader:
+            normalized = normalize_row(row)
             inference_table.add_row()
             for col in top_inputs:
-                if col in row:
-                    inference_table.rows[-1][col] = row[col]
+                if col in normalized:
+                    inference_table.rows[-1][col] = normalized[col]
 
     elif filename.endswith(".json"):
-        data = json_module.loads(content)
+        data = json.loads(content)
         rows = data if isinstance(data, list) else [data]
         for item in rows:
+            normalized = normalize_row(item)
             inference_table.add_row()
             for col in top_inputs:
-                if col in item:
-                    inference_table.rows[-1][col] = str(item[col])
+                if col in normalized:
+                    inference_table.rows[-1][col] = str(normalized[col])
+
+    elif filename.endswith(".yaml") or filename.endswith(".yml"):
+        data = yaml.safe_load(content)
+        rows = data if isinstance(data, list) else [data]
+        for item in rows:
+            normalized = normalize_row(item)
+            inference_table.add_row()
+            for col in top_inputs:
+                if col in normalized:
+                    inference_table.rows[-1][col] = str(normalized[col])
 
     return render_inference_section()
+
+
+@rt("/table/upload", methods=["POST"])
+async def upload_build_file(request):    
+    form = await request.form()
+    file = form.get("file")
+    
+    if not file:
+        return render_full_page()
+    
+    content = await file.read()
+    filename = file.filename.lower()
+    
+    all_columns = set()
+    for block in config.blocks:
+        if hasattr(block, 'input_columns'):
+            all_columns.update(block.input_columns)
+        if hasattr(block, 'output_columns'):
+            all_columns.update(block.output_columns)
+    
+    if filename.endswith(".csv"):
+        reader = csv.DictReader(io.StringIO(content.decode()))
+        table.clear_rows()
+        for row in reader:
+            normalized = normalize_row(row)
+            table.add_row()
+            for col in all_columns:
+                if col in normalized:
+                    table.rows[-1][col] = normalized[col]
+    
+    elif filename.endswith(".json"):
+        data = json.loads(content)
+        rows = data if isinstance(data, list) else [data]
+        table.clear_rows()
+        for item in rows:
+            normalized = normalize_row(item)
+            table.add_row()
+            for col in all_columns:
+                if col in normalized:
+                    table.rows[-1][col] = str(normalized[col])
+    
+    elif filename.endswith(".yaml") or filename.endswith(".yml"):
+        data = yaml.safe_load(content)
+        rows = data if isinstance(data, list) else [data]
+        table.clear_rows()
+        for item in rows:
+            normalized = normalize_row(item)
+            table.add_row()
+            for col in all_columns:
+                if col in normalized:
+                    table.rows[-1][col] = str(normalized[col])
+    
+    return render_full_page()
+
+
+@rt("/inference/download")
+def download_results():
+    output_cols = sorted(get_output_columns())
+    result_cols = [
+        c for c in sorted(inference_table.columns - {"id"})
+        if c not in get_top_level_inputs()
+    ]
+    all_columns = output_cols + [c for c in result_cols if c not in output_cols]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["id"] + all_columns, extrasaction='ignore')
+    writer.writeheader()
+    writer.writerows(inference_table.rows)
+    return Response(
+        output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=inference_results.csv"}
+    )
 
 
 @rt("/set-lm", methods=["POST"])
@@ -391,6 +490,7 @@ async def set_lm(request):
     form = await request.form()
     config.lm_model = form.get("lm_model", "ollama/llama3.2")
     config.mark_unoptimized()
+    return ""
 
 
 @rt("/optimize", methods=["POST"])
