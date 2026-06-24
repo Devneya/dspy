@@ -152,7 +152,7 @@ def render_inference_section():
             Button(
                 UkIcon("play", height=14),
                 Span("Run", cls="ml-1"),
-                cls=(ButtonT.primary, "text-sm mt-4"),
+                cls=(ButtonT.primary, "text-sm mt-4 ml-2"),
                 hx_post="/infer",
                 hx_target="#inference-section",
                 hx_swap="outerHTML",
