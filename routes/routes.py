@@ -365,6 +365,14 @@ async def save_inference_cell(request):
     return ""
 
 
+def flatten_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value).replace("\n", " ").replace("\r", "")
+
+
 @rt("/inference/upload", methods=["POST"])
 async def upload_inference_file(request):
     form = await request.form()
@@ -388,7 +396,7 @@ async def upload_inference_file(request):
             inference_table.add_row()
             for col in top_inputs:
                 if col in normalized:
-                    inference_table.rows[-1][col] = normalized[col]
+                    inference_table.rows[-1][col] = flatten_value(normalized[col])
 
     elif filename.endswith(".json"):
         data = json.loads(content)
@@ -398,7 +406,7 @@ async def upload_inference_file(request):
             inference_table.add_row()
             for col in top_inputs:
                 if col in normalized:
-                    inference_table.rows[-1][col] = str(normalized[col])
+                    inference_table.rows[-1][col] = flatten_value(normalized[col])
 
     elif filename.endswith(".yaml") or filename.endswith(".yml"):
         data = yaml.safe_load(content)
@@ -408,7 +416,7 @@ async def upload_inference_file(request):
             inference_table.add_row()
             for col in top_inputs:
                 if col in normalized:
-                    inference_table.rows[-1][col] = str(normalized[col])
+                    inference_table.rows[-1][col] = flatten_value(normalized[col])
 
     return render_inference_section()
 
@@ -439,7 +447,7 @@ async def upload_build_file(request):
             table.add_row()
             for col in all_columns:
                 if col in normalized:
-                    table.rows[-1][col] = normalized[col]
+                    table.rows[-1][col] = flatten_value(normalized[col])
     
     elif filename.endswith(".json"):
         data = json.loads(content)
@@ -450,7 +458,7 @@ async def upload_build_file(request):
             table.add_row()
             for col in all_columns:
                 if col in normalized:
-                    table.rows[-1][col] = str(normalized[col])
+                    table.rows[-1][col] = flatten_value(normalized[col])
     
     elif filename.endswith(".yaml") or filename.endswith(".yml"):
         data = yaml.safe_load(content)
@@ -461,7 +469,7 @@ async def upload_build_file(request):
             table.add_row()
             for col in all_columns:
                 if col in normalized:
-                    table.rows[-1][col] = str(normalized[col])
+                    table.rows[-1][col] = flatten_value(normalized[col])
     
     return render_full_page()
 
