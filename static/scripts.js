@@ -11,6 +11,22 @@ function handleAutoFocus() {
     });
 }
 
+// =================== ADD BLOCK ===================
+function toggleAddBlockMenu() {
+  const menu = document.getElementById("add-block-menu");
+  if (menu) {
+    menu.classList.toggle("hidden");
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("add-block-menu");
+  const btn = e.target.closest('[onclick="toggleAddBlockMenu()"]');
+  if (menu && !menu.contains(e.target) && !btn) {
+    menu.classList.add("hidden");
+  }
+});
+
 // ================= TABS =================
 let tabsSortable = null;
 
@@ -184,6 +200,44 @@ function validateAndSaveColumn(input) {
   });
 }
 
+// =================== SAVE ===================
+function saveCell(input, rowId, colName) {
+  htmx.ajax("POST", "/save-cell", {
+    swap: "none",
+    values: { row_id: rowId, col_name: colName, value: input.value },
+  });
+}
+
+function saveParam(input, blockId, paramName) {
+  htmx.ajax("POST", "/save-param", {
+    swap: "none",
+    values: { block_id: blockId, param_name: paramName, value: input.value },
+  });
+}
+
+// =================== FILE UPLOAD ===================
+
+function uploadInferenceFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  fetch("/inference/upload", {
+    method: "POST",
+    body: formData,
+  })
+    .then((response) => response.text())
+    .then((html) => {
+      const target = document.querySelector(input.dataset.target);
+      if (target) target.outerHTML = html;
+    })
+    .catch((err) => console.error("Upload failed:", err));
+
+  input.value = "";
+}
+
 // =================== THEME ===================
 function initTheme() {
   const theme = localStorage.getItem("dspy_theme");
@@ -224,5 +278,8 @@ Object.assign(window, {
   hideColumnSuggestions,
   filterColumnSuggestions,
   validateAndSaveColumn,
+  saveCell,
+  saveParam,
   toggleAddBlockMenu,
+  uploadInferenceFile,
 });

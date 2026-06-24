@@ -533,6 +533,7 @@ async def run_inference(request):
         return Div(P("Program not optimized yet.", cls="text-sm text-muted-foreground"))
 
     form = await request.form()
+    print(f"Form keys: {list(form.keys())}", file=sys.stderr)
 
     rows = {}
     for key, value in form.items():
