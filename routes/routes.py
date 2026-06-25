@@ -485,14 +485,13 @@ def download_results():
         if c not in get_top_level_inputs()
     ]
     all_columns = output_cols + [c for c in result_cols if c not in output_cols]
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["id"] + all_columns, extrasaction='ignore')
-    writer.writeheader()
-    writer.writerows(inference_table.rows)
+    output_rows = []
+    for row in inference_table.rows:
+        output_rows.append({col: row.get(col, "") for col in all_columns})
     return Response(
-        output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=inference_results.csv"}
+        json.dumps(output_rows, indent=2, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=inference_results.json"}
     )
 
 
